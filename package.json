@@ -1,0 +1,14 @@
+{
+  "name": "nodex-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter \"@nodex/*\" --parallel dev",
+    "build": "pnpm --filter \"@nodex/*\" build",
+    "lint": "pnpm --filter \"@nodex/*\" lint",
+    "start": "pnpm --filter \"@nodex/server\" start"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

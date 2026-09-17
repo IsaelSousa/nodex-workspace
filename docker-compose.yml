@@ -1,0 +1,18 @@
+services:
+  nodex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nodex-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+    volumes:
+      - nodex_data:/app/data
+
+volumes:
+  nodex_data:

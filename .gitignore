@@ -1,0 +1,17 @@
+node_modules
+dist
+build
+.turbo
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+data/
+vaults/
+uploads/

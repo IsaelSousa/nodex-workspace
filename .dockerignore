@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+.turbo
+.git
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.vscode
+data
+vaults
+uploads

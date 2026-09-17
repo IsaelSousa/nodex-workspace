@@ -1,0 +1,615 @@
+import React, { useMemo, useState, useEffect } from 'react';
+import { useTimeTrackingStore } from '../stores/useTimeTrackingStore';
+import { TimeEntry } from '@nodex/shared';
+import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, BarChart3 } from 'lucide-react';
+
+const PROJECT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899', '#64748b'];
+const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const TIMELINE_WINDOW_DAYS = 15;
+
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getWeekDays(anchor: Date): Date[] {
+  const date = new Date(anchor);
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(date);
+  monday.setDate(date.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function parseDurationInput(input: string): number | null {
+  const s = input.trim().toLowerCase().replace(',', '.');
+  if (!s) return null;
+
+  let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+  m = s.match(/^(\d+)\s*h\s*(\d{1,2})?\s*m?$/);
+  if (m) return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+
+  m = s.match(/^(\d+)\s*m$/);
+  if (m) return parseInt(m[1], 10);
+
+  m = s.match(/^(\d*\.?\d+)$/);
+  if (m) return Math.round(parseFloat(m[1]) * 60);
+
+  return null;
+}
+
+function formatDurationInput(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
+function formatDurationDisplay(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+
+interface EditableRow {
+  id?: string;
+  duration: string;
+  description: string;
+  tags: string;
+}
+
+interface PopoverState {
+  projectId: string;
+  date: string;
+  rows: EditableRow[];
+  repeatDays: Set<string>;
+}
+
+export const TimeTrackingView: React.FC = () => {
+  const {
+    projects,
+    timeEntries,
+    fetchAll,
+    createProject,
+    deleteProject,
+    createTimeEntry,
+    updateTimeEntry,
+    deleteTimeEntry,
+  } = useTimeTrackingStore();
+
+  const [view, setView] = useState<'grid' | 'timeline'>('grid');
+  const [weekAnchor, setWeekAnchor] = useState(new Date());
+  const [timelineEnd, setTimelineEnd] = useState(new Date());
+  const [popover, setPopover] = useState<PopoverState | null>(null);
+  const [projectsModalOpen, setProjectsModalOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  const activeProjects = useMemo(() => projects.filter((p) => !p.isArchived), [projects]);
+  const weekDays = useMemo(() => getWeekDays(weekAnchor), [weekAnchor]);
+  const weekDayKeys = useMemo(() => weekDays.map(toDateKey), [weekDays]);
+
+  const timelineDays = useMemo(() => {
+    const end = new Date(timelineEnd);
+    end.setHours(0, 0, 0, 0);
+    return Array.from({ length: TIMELINE_WINDOW_DAYS }, (_, i) => {
+      const d = new Date(end);
+      d.setDate(end.getDate() - (TIMELINE_WINDOW_DAYS - 1 - i));
+      return d;
+    });
+  }, [timelineEnd]);
+
+  const entriesByCell = useMemo(() => {
+    const map = new Map<string, TimeEntry[]>();
+    timeEntries.forEach((e) => {
+      const key = `${e.projectId}__${e.date}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    });
+    return map;
+  }, [timeEntries]);
+
+  const cellEntries = (projectId: string, dateKey: string) => entriesByCell.get(`${projectId}__${dateKey}`) || [];
+  const cellMinutes = (projectId: string, dateKey: string) =>
+    cellEntries(projectId, dateKey).reduce((sum, e) => sum + e.durationMinutes, 0);
+  const rowTotal = (projectId: string) => weekDayKeys.reduce((sum, dk) => sum + cellMinutes(projectId, dk), 0);
+  const colTotal = (dateKey: string) => activeProjects.reduce((sum, p) => sum + cellMinutes(p.id, dateKey), 0);
+  const grandTotal = weekDayKeys.reduce((sum, dk) => sum + colTotal(dk), 0);
+
+  const weekLabel = `${weekDays[0].getDate()} – ${weekDays[6].getDate()} de ${weekDays[6].toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+
+  const timelineLabel = `${timelineDays[0].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${timelineDays[timelineDays.length - 1].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+
+  const openCell = (projectId: string, date: string) => {
+    const existing = cellEntries(projectId, date);
+    const rows: EditableRow[] =
+      existing.length > 0
+        ? existing.map((e) => ({
+            id: e.id,
+            duration: formatDurationInput(e.durationMinutes),
+            description: e.description || '',
+            tags: (e.tags || []).join(', '),
+          }))
+        : [{ duration: '', description: '', tags: '' }];
+    setPopover({ projectId, date, rows, repeatDays: new Set() });
+  };
+
+  const updateRow = (index: number, patch: Partial<EditableRow>) => {
+    if (!popover) return;
+    setPopover({ ...popover, rows: popover.rows.map((r, i) => (i === index ? { ...r, ...patch } : r)) });
+  };
+
+  const addRow = () => {
+    if (!popover) return;
+    setPopover({ ...popover, rows: [...popover.rows, { duration: '', description: '', tags: '' }] });
+  };
+
+  const removeRow = async (index: number) => {
+    if (!popover) return;
+    const row = popover.rows[index];
+    if (row.id) await deleteTimeEntry(row.id);
+    const rows = popover.rows.filter((_, i) => i !== index);
+    setPopover({ ...popover, rows: rows.length > 0 ? rows : [{ duration: '', description: '', tags: '' }] });
+  };
+
+  const toggleRepeatDay = (dateKey: string) => {
+    if (!popover) return;
+    const next = new Set(popover.repeatDays);
+    if (next.has(dateKey)) next.delete(dateKey);
+    else next.add(dateKey);
+    setPopover({ ...popover, repeatDays: next });
+  };
+
+  const handleSavePopover = async () => {
+    if (!popover) return;
+    const { projectId, date, rows, repeatDays } = popover;
+
+    for (const row of rows) {
+      const durationMinutes = parseDurationInput(row.duration);
+      if (!durationMinutes || durationMinutes <= 0) continue;
+
+      const tags = row.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const basePayload = {
+        projectId,
+        startTime: '00:00',
+        endTime: formatDurationInput(durationMinutes),
+        durationMinutes,
+        description: row.description.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+      };
+
+      if (row.id) {
+        await updateTimeEntry(row.id, basePayload);
+      } else {
+        await createTimeEntry({ ...basePayload, date });
+        for (const repeatDate of repeatDays) {
+          await createTimeEntry({ ...basePayload, date: repeatDate });
+        }
+      }
+    }
+
+    setPopover(null);
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    await createProject(newProjectName.trim(), newProjectColor);
+    setNewProjectName('');
+  };
+
+  const popoverProject = popover ? activeProjects.find((p) => p.id === popover.projectId) : null;
+
+  return (
+    <div className="h-full flex flex-col p-6 overflow-hidden select-none">
+      <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-neutral-100">Apontamento de Horas</h2>
+
+          <div className="flex items-center gap-0.5 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setView('grid')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                view === 'grid' ? 'bg-indigo-600/20 text-indigo-300' : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Grade
+            </button>
+            <button
+              onClick={() => setView('timeline')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                view === 'timeline' ? 'bg-indigo-600/20 text-indigo-300' : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Linha do Tempo
+            </button>
+          </div>
+
+          {view === 'grid' ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setWeekAnchor(new Date(weekDays[0].getTime() - 3 * 24 * 60 * 60 * 1000))}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-neutral-300 font-medium w-52 text-center capitalize">{weekLabel}</span>
+              <button
+                onClick={() => setWeekAnchor(new Date(weekDays[6].getTime() + 3 * 24 * 60 * 60 * 1000))}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setWeekAnchor(new Date())}
+                className="px-2 py-1 text-[11px] hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                Esta semana
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setTimelineEnd(new Date(timelineDays[0].getTime() - 24 * 60 * 60 * 1000))}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+                title="15 dias anteriores"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-neutral-300 font-medium w-40 text-center">{timelineLabel}</span>
+              <button
+                onClick={() => setTimelineEnd(new Date(timelineDays[timelineDays.length - 1].getTime() + TIMELINE_WINDOW_DAYS * 24 * 60 * 60 * 1000))}
+                disabled={toDateKey(timelineEnd) >= toDateKey(new Date())}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="Próximos 15 dias"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setTimelineEnd(new Date())}
+                className="px-2 py-1 text-[11px] hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                Período mais recente
+              </button>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => setProjectsModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-all"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          <span>Gerenciar Projetos</span>
+        </button>
+      </div>
+
+      {view === 'grid' && (activeProjects.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-neutral-500 text-xs">
+          Nenhum projeto ainda.{' '}
+          <button onClick={() => setProjectsModalOpen(true)} className="text-indigo-400 hover:underline ml-1">
+            Crie um projeto
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto rounded-2xl border border-neutral-800">
+          <div className="min-w-[820px]" style={{ display: 'grid', gridTemplateColumns: '160px repeat(7, 1fr) 84px' }}>
+            <div className="sticky top-0 z-10 bg-neutral-900 border-b border-r border-neutral-800 px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
+              Projeto
+            </div>
+            {weekDays.map((d, i) => (
+              <div
+                key={toDateKey(d)}
+                className={`sticky top-0 z-10 border-b border-r border-neutral-800 px-2 py-2 text-center ${
+                  toDateKey(d) === toDateKey(new Date()) ? 'bg-indigo-600/10' : 'bg-neutral-900'
+                }`}
+              >
+                <div className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">{WEEKDAY_LABELS[i]}</div>
+                <div className="text-xs text-neutral-300 font-medium">{d.getDate()}</div>
+              </div>
+            ))}
+            <div className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800 px-2 py-2 text-center text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
+              Total
+            </div>
+
+            {activeProjects.map((project) => (
+              <React.Fragment key={project.id}>
+                <div className="flex items-center gap-2 border-b border-r border-neutral-800 px-3 py-2 bg-neutral-900/40 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
+                  <span className="text-xs font-medium text-neutral-200 truncate">{project.name}</span>
+                </div>
+                {weekDayKeys.map((dk) => {
+                  const minutes = cellMinutes(project.id, dk);
+                  const entries = cellEntries(project.id, dk);
+                  return (
+                    <button
+                      key={dk}
+                      onClick={() => openCell(project.id, dk)}
+                      className={`border-b border-r border-neutral-800 px-2 py-2 text-center hover:bg-neutral-800/60 transition-colors ${
+                        minutes > 0 ? 'text-indigo-300 font-medium' : 'text-neutral-700'
+                      }`}
+                    >
+                      <span className="text-xs">{minutes > 0 ? formatDurationInput(minutes) : '–'}</span>
+                      {entries.some((e) => e.tags && e.tags.length > 0) && (
+                        <span className="block w-1 h-1 rounded-full bg-amber-400 mx-auto mt-0.5" />
+                      )}
+                    </button>
+                  );
+                })}
+                <div className="border-b border-neutral-800 px-2 py-2 text-center text-xs font-semibold text-neutral-300 bg-neutral-900/40">
+                  {rowTotal(project.id) > 0 ? formatDurationInput(rowTotal(project.id)) : '–'}
+                </div>
+              </React.Fragment>
+            ))}
+
+            <div className="px-3 py-2 text-[11px] font-semibold text-neutral-400 bg-neutral-900 border-r border-neutral-800">
+              Total
+            </div>
+            {weekDayKeys.map((dk) => (
+              <div key={dk} className="px-2 py-2 text-center text-[11px] font-semibold text-neutral-400 bg-neutral-900 border-r border-neutral-800">
+                {colTotal(dk) > 0 ? formatDurationInput(colTotal(dk)) : '–'}
+              </div>
+            ))}
+            <div className="px-2 py-2 text-center text-[11px] font-bold text-indigo-400 bg-neutral-900">
+              {formatDurationInput(grandTotal)}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {view === 'timeline' && (activeProjects.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-neutral-500 text-xs">
+          Nenhum projeto ainda.{' '}
+          <button onClick={() => setProjectsModalOpen(true)} className="text-indigo-400 hover:underline ml-1">
+            Crie um projeto
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto rounded-2xl border border-neutral-800 p-5 flex flex-col">
+          {(() => {
+            const dayTotals = timelineDays.map((d) => colTotal(toDateKey(d)));
+            const maxMinutes = Math.max(...dayTotals, 60);
+            const hourLines = 4;
+
+            return (
+              <>
+                <div className="flex-1 flex items-stretch gap-2 min-h-[220px]">
+                  <div className="flex flex-col justify-between text-[10px] text-neutral-500 pr-1 pb-6">
+                    {Array.from({ length: hourLines + 1 }, (_, i) => {
+                      const minutes = Math.round((maxMinutes * (hourLines - i)) / hourLines);
+                      return <span key={i}>{formatDurationInput(minutes)}</span>;
+                    })}
+                  </div>
+
+                  <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${TIMELINE_WINDOW_DAYS}, 1fr)` }}>
+                    {timelineDays.map((d) => {
+                      const dk = toDateKey(d);
+                      const total = colTotal(dk);
+                      const isToday = dk === toDateKey(new Date());
+                      return (
+                        <div key={dk} className="flex flex-col items-center justify-end h-full">
+                          <div
+                            className="w-full flex-1 flex flex-col-reverse justify-start rounded-t-md overflow-hidden bg-neutral-800/30"
+                            style={{ maxHeight: '100%' }}
+                          >
+                            {activeProjects.map((p) => {
+                              const minutes = cellMinutes(p.id, dk);
+                              if (minutes <= 0) return null;
+                              return (
+                                <div
+                                  key={p.id}
+                                  title={`${p.name}: ${formatDurationDisplay(minutes)}`}
+                                  style={{ height: `${(minutes / maxMinutes) * 100}%`, backgroundColor: p.color }}
+                                  className="w-full first:rounded-t-md"
+                                />
+                              );
+                            })}
+                          </div>
+                          <span className={`text-[9px] mt-1 ${isToday ? 'text-indigo-400 font-semibold' : 'text-neutral-600'}`}>
+                            {d.getDate()}/{d.getMonth() + 1}
+                          </span>
+                          <span className="text-[9px] text-neutral-500">{total > 0 ? formatDurationInput(total) : ''}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-3 pt-4 mt-4 border-t border-neutral-800">
+                  {activeProjects.map((p) => (
+                    <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+                      {p.name}
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      ))}
+
+      {popover && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPopover(null)}>
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 border-b border-neutral-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: popoverProject?.color }} />
+                <h3 className="text-xs font-semibold text-neutral-200 truncate">
+                  {popoverProject?.name} — {new Date(`${popover.date}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })}
+                </h3>
+              </div>
+              <button onClick={() => setPopover(null)} className="p-1 text-neutral-400 hover:text-neutral-200 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-3 max-h-[60vh] overflow-y-auto">
+              {popover.rows.map((row, index) => (
+                <div key={row.id || `new-${index}`} className="space-y-1.5 pb-3 border-b border-neutral-800 last:border-b-0 last:pb-0">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="ex: 2h30"
+                      value={row.duration}
+                      onChange={(e) => updateRow(index, { duration: e.target.value })}
+                      autoFocus={index === 0}
+                      className="w-24 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Descrição..."
+                      value={row.description}
+                      onChange={(e) => updateRow(index, { description: e.target.value })}
+                      className="flex-1 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
+                    />
+                    <button
+                      onClick={() => removeRow(index)}
+                      className="p-1.5 rounded-lg hover:bg-rose-500/10 text-neutral-500 hover:text-rose-400 transition-colors shrink-0"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Tags separadas por vírgula (ex: reunião, bug)"
+                    value={row.tags}
+                    onChange={(e) => updateRow(index, { tags: e.target.value })}
+                    className="w-full bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-[11px] text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
+                  />
+                  {!row.duration.trim() ? null : parseDurationInput(row.duration) === null ? (
+                    <p className="text-[10px] text-rose-400">Formato inválido — use "2h30", "2:30" ou "2.5"</p>
+                  ) : null}
+                </div>
+              ))}
+
+              <button
+                onClick={addRow}
+                className="flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar outro apontamento nesse dia
+              </button>
+
+              <div>
+                <label className="text-[11px] text-neutral-500 mb-1 block">Repetir também em:</label>
+                <div className="flex flex-wrap gap-1">
+                  {weekDays.map((d, i) => {
+                    const dk = toDateKey(d);
+                    if (dk === popover.date) return null;
+                    const active = popover.repeatDays.has(dk);
+                    return (
+                      <button
+                        key={dk}
+                        onClick={() => toggleRepeatDay(dk)}
+                        className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                          active
+                            ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                            : 'bg-neutral-950 text-neutral-400 border border-neutral-800 hover:border-neutral-700'
+                        }`}
+                      >
+                        {WEEKDAY_LABELS[i]} {d.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-neutral-800 flex items-center justify-end">
+              <button
+                onClick={handleSavePopover}
+                className="px-3 py-1.5 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg shadow transition-colors"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {projectsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setProjectsModalOpen(false)}>
+          <div className="w-full max-w-sm bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 border-b border-neutral-800 flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-neutral-200">Gerenciar Projetos</h3>
+              <button onClick={() => setProjectsModalOpen(false)} className="p-1 text-neutral-400 hover:text-neutral-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-1.5 max-h-56 overflow-y-auto">
+              {activeProjects.length === 0 ? (
+                <p className="text-[11px] text-neutral-500">Nenhum projeto ainda. Crie um abaixo.</p>
+              ) : (
+                activeProjects.map((p) => (
+                  <div key={p.id} className="group flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-neutral-800/60">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="text-xs text-neutral-200 truncate">{p.name}</span>
+                    </div>
+                    <button
+                      onClick={() => deleteProject(p.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-neutral-500 transition-opacity"
+                      title="Excluir projeto (e seus apontamentos)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-3 border-t border-neutral-800 space-y-2">
+              <input
+                type="text"
+                placeholder="Nome do novo projeto..."
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                className="w-full bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
+              />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  {PROJECT_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setNewProjectColor(c)}
+                      className={`w-5 h-5 rounded-full transition-transform ${newProjectColor === c ? 'ring-2 ring-offset-2 ring-offset-neutral-900 ring-white scale-110' : ''}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={handleCreateProject}
+                  disabled={!newProjectName.trim()}
+                  className="px-3 py-1.5 text-[11px] bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white font-medium rounded-lg shadow transition-colors"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
