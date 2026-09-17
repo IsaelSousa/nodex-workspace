@@ -446,6 +446,96 @@ function mapTimeEntryRow(r: any): TimeEntry {
   };
 }
 
+export interface BackupData {
+  version: number;
+  exportedAt: string;
+  meta: { key: string; value: string }[];
+  nodes: any[];
+  edges: any[];
+  calendarEvents: any[];
+  projects: any[];
+  timeEntries: any[];
+}
+
+const BACKUP_VERSION = 1;
+
+export function exportAllData(): BackupData {
+  return {
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    meta: db.prepare('SELECT key, value FROM meta').all() as any[],
+    nodes: db.prepare('SELECT * FROM nodes').all() as any[],
+    edges: db.prepare('SELECT * FROM edges').all() as any[],
+    calendarEvents: db.prepare('SELECT * FROM calendar_events').all() as any[],
+    projects: db.prepare('SELECT * FROM projects').all() as any[],
+    timeEntries: db.prepare('SELECT * FROM time_entries').all() as any[],
+  };
+}
+
+export function importAllData(data: BackupData): void {
+  const tx = db.transaction(() => {
+    db.exec(`
+      DELETE FROM edges;
+      DELETE FROM time_entries;
+      DELETE FROM calendar_events;
+      DELETE FROM projects;
+      DELETE FROM nodes;
+      DELETE FROM meta;
+    `);
+
+    const insertMeta = db.prepare('INSERT INTO meta (key, value) VALUES (@key, @value)');
+    for (const row of data.meta || []) insertMeta.run(row);
+
+    const insertNode = db.prepare(`
+      INSERT INTO nodes (
+        id, workspace_id, parent_node_id, type, title, icon,
+        is_archived, is_favorite, content_markdown, board_config,
+        properties, created_at, updated_at
+      ) VALUES (
+        @id, @workspace_id, @parent_node_id, @type, @title, @icon,
+        @is_archived, @is_favorite, @content_markdown, @board_config,
+        @properties, @created_at, @updated_at
+      )
+    `);
+    for (const row of data.nodes || []) insertNode.run(row);
+
+    const insertProject = db.prepare(`
+      INSERT INTO projects (id, workspace_id, name, color, is_archived, created_at, updated_at)
+      VALUES (@id, @workspace_id, @name, @color, @is_archived, @created_at, @updated_at)
+    `);
+    for (const row of data.projects || []) insertProject.run(row);
+
+    const insertEvent = db.prepare(`
+      INSERT INTO calendar_events (
+        id, workspace_id, title, description, start_at, end_at,
+        reminder_minutes_before, notified, created_at, updated_at
+      ) VALUES (
+        @id, @workspace_id, @title, @description, @start_at, @end_at,
+        @reminder_minutes_before, @notified, @created_at, @updated_at
+      )
+    `);
+    for (const row of data.calendarEvents || []) insertEvent.run(row);
+
+    const insertEdge = db.prepare(`
+      INSERT INTO edges (id, source_node_id, target_node_id, edge_type, label, created_at)
+      VALUES (@id, @source_node_id, @target_node_id, @edge_type, @label, @created_at)
+    `);
+    for (const row of data.edges || []) insertEdge.run(row);
+
+    const insertEntry = db.prepare(`
+      INSERT INTO time_entries (
+        id, workspace_id, project_id, date, start_time, end_time,
+        break_minutes, duration_minutes, tags, description, created_at, updated_at
+      ) VALUES (
+        @id, @workspace_id, @project_id, @date, @start_time, @end_time,
+        @break_minutes, @duration_minutes, @tags, @description, @created_at, @updated_at
+      )
+    `);
+    for (const row of data.timeEntries || []) insertEntry.run(row);
+  });
+  tx();
+}
+
 export function getSetting(key: string): string | undefined {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as any;
   return row?.value;

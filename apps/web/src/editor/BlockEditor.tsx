@@ -9,19 +9,21 @@ import { FileAttachmentNode } from './extensions/FileAttachmentNode';
 import { useNodeStore } from '../stores/useNodeStore';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { EmojiPicker } from '../components/EmojiPicker';
-import { 
-  Heading1, 
-  Heading2, 
-  Heading3, 
-  List, 
-  CheckSquare, 
-  Code, 
-  Quote, 
+import { exportNodeToPdf } from '../lib/exportPdf';
+import {
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  CheckSquare,
+  Code,
+  Quote,
   Minus,
   Paperclip,
   Image as ImageIcon,
   Upload,
-  FilePlus2
+  FilePlus2,
+  FileDown
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -41,9 +43,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastLoadedNodeId = useRef<string | null>(null);
+
+  const handleExportPdf = async () => {
+    if (!node || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportNodeToPdf(node);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const handleWikiLinkClick = (linkTitle: string) => {
     let targetNode = getNodeByTitle(linkTitle);
@@ -204,13 +217,25 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
         <div className="flex items-center justify-between">
           <EmojiPicker value={node.icon || '📄'} onChange={(emoji) => updateNode(nodeId, { icon: emoji })} />
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-all shadow-sm"
-          >
-            <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Vincular Arquivo</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white disabled:opacity-50 transition-all shadow-sm"
+              title="Exportar esta nota como PDF"
+            >
+              <FileDown className="w-3.5 h-3.5 text-rose-400" />
+              <span>{isExportingPdf ? 'Gerando PDF...' : 'Exportar PDF'}</span>
+            </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-all shadow-sm"
+            >
+              <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Vincular Arquivo</span>
+            </button>
+          </div>
         </div>
 
         <input

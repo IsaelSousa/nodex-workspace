@@ -1,13 +1,44 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '../stores/useSettingsStore';
-import { X, Send, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Send, CheckCircle2, XCircle, Download, Upload } from 'lucide-react';
 
 export const SettingsModal: React.FC = () => {
-  const { telegram, isTesting, testResult, fetchSettings, saveTelegram, testTelegram, isSettingsModalOpen, setSettingsModalOpen } = useSettingsStore();
+  const {
+    telegram,
+    isTesting,
+    testResult,
+    fetchSettings,
+    saveTelegram,
+    testTelegram,
+    isSettingsModalOpen,
+    setSettingsModalOpen,
+    isExporting,
+    isImporting,
+    backupResult,
+    exportBackup,
+    importBackup,
+  } = useSettingsStore();
   const onClose = () => setSettingsModalOpen(false);
   const [botToken, setBotToken] = useState('');
   const [chatId, setChatId] = useState('');
   const [saved, setSaved] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const confirmed = window.confirm(
+      'Importar este backup vai APAGAR todos os dados atuais (notas, quadros, eventos, projetos e apontamentos) e substituí-los pelo conteúdo do arquivo. Deseja continuar?'
+    );
+    if (!confirmed) return;
+    const ok = await importBackup(file);
+    if (ok) {
+      window.location.reload();
+    }
+  };
 
   useEffect(() => {
     if (isSettingsModalOpen) fetchSettings();
@@ -96,6 +127,47 @@ export const SettingsModal: React.FC = () => {
           >
             Salvar
           </button>
+        </div>
+
+        <div className="p-3 border-t border-neutral-800">
+          <h3 className="text-xs font-semibold text-neutral-200 mb-2">Backup de Dados</h3>
+          <p className="text-[11px] text-neutral-400 leading-relaxed mb-3">
+            Exporte todos os seus dados (notas, quadros, eventos, projetos e apontamentos) para um
+            arquivo JSON, ou importe um backup anterior. <span className="text-amber-400">Importar substitui todos os dados atuais.</span>
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportBackup}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-neutral-300 border border-neutral-700 hover:bg-neutral-800 disabled:opacity-40 rounded-lg transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {isExporting ? 'Exportando...' : 'Exportar Backup'}
+            </button>
+            <button
+              onClick={handleImportClick}
+              disabled={isImporting}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-neutral-300 border border-neutral-700 hover:bg-neutral-800 disabled:opacity-40 rounded-lg transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {isImporting ? 'Importando...' : 'Importar Backup'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
+          </div>
+
+          {backupResult && (
+            <div className={`flex items-center gap-1.5 text-[11px] mt-2 ${backupResult.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {backupResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+              {backupResult.message}
+            </div>
+          )}
         </div>
       </div>
     </div>

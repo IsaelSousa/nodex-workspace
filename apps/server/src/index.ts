@@ -9,6 +9,7 @@ import { eventRoutes } from './routes/events.js';
 import { settingsRoutes } from './routes/settings.js';
 import { projectRoutes } from './routes/projects.js';
 import { timeEntryRoutes } from './routes/time-entries.js';
+import { backupRoutes } from './routes/backup.js';
 import { initDatabase, db } from './db/sqlite.js';
 import { startReminderScheduler } from './telegram.js';
 
@@ -22,6 +23,7 @@ const fastify = Fastify({
   logger: {
     level: 'info',
   },
+  bodyLimit: 50 * 1024 * 1024,
 });
 
 async function main() {
@@ -57,6 +59,7 @@ async function main() {
   await fastify.register(settingsRoutes);
   await fastify.register(projectRoutes);
   await fastify.register(timeEntryRoutes);
+  await fastify.register(backupRoutes);
 
   const webDistPath = path.resolve(__dirname, '../../web/dist');
   try {
