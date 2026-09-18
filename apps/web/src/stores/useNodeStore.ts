@@ -15,6 +15,11 @@ interface NodeStore {
   isCommandPaletteOpen: boolean;
   isInitialized: boolean;
   activeTagFilter: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
+
+  undo: () => void;
+  redo: () => void;
 
   fetchNodesFromBackend: () => Promise<void>;
   setActiveNodeId: (id: string | null) => void;
@@ -264,6 +269,60 @@ async function syncNodeToBackend(node: NodeEntity, method: 'POST' | 'PUT' | 'DEL
   }
 }
 
+// Undo/redo history. Kept outside the persisted zustand state on purpose: it only
+// makes sense for the current session, and stashing full node snapshots in
+// localStorage on every keystroke would be wasteful.
+const MAX_HISTORY = 50;
+const BATCH_WINDOW_MS = 1500;
+
+let pastStack: NodeEntity[][] = [];
+let futureStack: NodeEntity[][] = [];
+let lastBatchKey: string | null = null;
+let lastBatchAt = 0;
+
+type SetState = (partial: Partial<NodeStore>) => void;
+type GetState = () => NodeStore;
+
+// Call at the start of a mutating action, before its own `set(...)`. Passing a
+// `batchKey` coalesces rapid repeated calls (e.g. keystrokes updating the same
+// node) into a single undo step instead of one step per keystroke.
+function pushHistory(set: SetState, get: GetState, batchKey?: string) {
+  const now = Date.now();
+  if (batchKey && batchKey === lastBatchKey && now - lastBatchAt < BATCH_WINDOW_MS) {
+    lastBatchAt = now;
+    return;
+  }
+  pastStack.push(get().nodes);
+  if (pastStack.length > MAX_HISTORY) pastStack.shift();
+  futureStack = [];
+  lastBatchKey = batchKey ?? null;
+  lastBatchAt = now;
+  set({ canUndo: true, canRedo: false });
+}
+
+function resetHistoryBatch() {
+  lastBatchKey = null;
+  lastBatchAt = 0;
+}
+
+// Reconciles the backend with an undo/redo jump between two node-array snapshots.
+function syncNodesDiff(from: NodeEntity[], to: NodeEntity[]) {
+  const fromMap = new Map(from.map((n) => [n.id, n]));
+  const toMap = new Map(to.map((n) => [n.id, n]));
+
+  fromMap.forEach((node, id) => {
+    if (!toMap.has(id)) syncNodeToBackend(node, 'DELETE');
+  });
+  toMap.forEach((node, id) => {
+    const prev = fromMap.get(id);
+    if (!prev) {
+      syncNodeToBackend(node, 'POST');
+    } else if (prev !== node) {
+      syncNodeToBackend(node, 'PUT');
+    }
+  });
+}
+
 export const useNodeStore = create<NodeStore>()(
   persist(
     (set, get) => ({
@@ -276,6 +335,40 @@ export const useNodeStore = create<NodeStore>()(
       isCommandPaletteOpen: false,
       isInitialized: false,
       activeTagFilter: null,
+      canUndo: false,
+      canRedo: false,
+
+      undo: () => {
+        if (pastStack.length === 0) return;
+        const prevNodes = pastStack.pop()!;
+        resetHistoryBatch();
+        set((state) => {
+          futureStack.push(state.nodes);
+          syncNodesDiff(state.nodes, prevNodes);
+          return {
+            nodes: prevNodes,
+            edges: generateEdges(prevNodes),
+            canUndo: pastStack.length > 0,
+            canRedo: true,
+          };
+        });
+      },
+
+      redo: () => {
+        if (futureStack.length === 0) return;
+        const nextNodes = futureStack.pop()!;
+        resetHistoryBatch();
+        set((state) => {
+          pastStack.push(state.nodes);
+          syncNodesDiff(state.nodes, nextNodes);
+          return {
+            nodes: nextNodes,
+            edges: generateEdges(nextNodes),
+            canUndo: true,
+            canRedo: futureStack.length > 0,
+          };
+        });
+      },
 
       fetchNodesFromBackend: async () => {
         try {
@@ -350,6 +443,7 @@ export const useNodeStore = create<NodeStore>()(
           updatedAt: new Date().toISOString(),
         };
 
+        pushHistory(set, get);
         set((state) => {
           const nextNodes = deduplicateNodes([...state.nodes, newNode]);
           return {
@@ -366,6 +460,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       updateNode: (id, updates) => {
+        pushHistory(set, get, `update:${id}`);
         set((state) => {
           let updatedNode: NodeEntity | null = null;
           const nextNodes = state.nodes.map((n) => {
@@ -393,6 +488,7 @@ export const useNodeStore = create<NodeStore>()(
           syncNodeToBackend(nodeToDelete, 'DELETE');
         }
 
+        pushHistory(set, get);
         set((state) => {
           const toRemove = collectDescendantIds(state.nodes, id);
           const nextNodes = state.nodes.filter((n) => !toRemove.has(n.id));
@@ -442,6 +538,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       toggleFavorite: (id) => {
+        pushHistory(set, get);
         set((state) => {
           const node = state.nodes.find(n => n.id === id);
           if (node) {
@@ -455,6 +552,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       moveCard: (cardId, sourceColId, destColId, newIndex) => {
+        pushHistory(set, get);
         set((state) => {
           const currentBoard = state.nodes.find(
             (n) => n.type === 'board' && n.boardConfig?.columns.some((c) => c.id === sourceColId)
@@ -519,6 +617,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       addColumnToBoard: (boardId, columnTitle) => {
+        pushHistory(set, get);
         set((state) => {
           const board = state.nodes.find((n) => n.id === boardId);
           if (!board || !board.boardConfig) return state;
@@ -555,6 +654,7 @@ export const useNodeStore = create<NodeStore>()(
 
         column.cardNodeIds.forEach((cardId) => get().deleteNode(cardId));
 
+        pushHistory(set, get);
         set((state) => {
           const b = state.nodes.find((n) => n.id === boardId);
           if (!b || !b.boardConfig) return state;
@@ -577,6 +677,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       addDatabaseColumn: (databaseId, name, type) => {
+        pushHistory(set, get);
         set((state) => {
           const db = state.nodes.find((n) => n.id === databaseId);
           if (!db || !db.databaseConfig) return state;
@@ -600,6 +701,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       updateDatabaseColumn: (databaseId, columnId, updates) => {
+        pushHistory(set, get, `update-dbcol:${databaseId}:${columnId}`);
         set((state) => {
           const db = state.nodes.find((n) => n.id === databaseId);
           if (!db || !db.databaseConfig) return state;
@@ -619,6 +721,7 @@ export const useNodeStore = create<NodeStore>()(
       },
 
       deleteDatabaseColumn: (databaseId, columnId) => {
+        pushHistory(set, get);
         set((state) => {
           const db = state.nodes.find((n) => n.id === databaseId);
           if (!db || !db.databaseConfig) return state;
@@ -718,6 +821,7 @@ export const useNodeStore = create<NodeStore>()(
           updatedAt: new Date().toISOString(),
         };
 
+        pushHistory(set, get);
         set((state) => {
           const nextNodes = deduplicateNodes([...state.nodes, template]);
           return { nodes: nextNodes, edges: generateEdges(nextNodes) };
@@ -753,6 +857,7 @@ export const useNodeStore = create<NodeStore>()(
           updatedAt: new Date().toISOString(),
         };
 
+        pushHistory(set, get);
         set((state) => {
           const nextNodes = deduplicateNodes([...state.nodes, newNode]);
           return {
@@ -799,6 +904,11 @@ export const useNodeStore = create<NodeStore>()(
         if (state && state.nodes) {
           state.nodes = deduplicateNodes(state.nodes);
           state.edges = generateEdges(state.nodes);
+        }
+        // The undo/redo stacks live outside persisted state and are empty on load.
+        if (state) {
+          state.canUndo = false;
+          state.canRedo = false;
         }
       },
     }

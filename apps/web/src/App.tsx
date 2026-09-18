@@ -14,12 +14,36 @@ import { DatabaseView } from './database/DatabaseView';
 import { TagsView } from './tags/TagsView';
 
 export function App() {
-  const { activeNodeId, activeView, nodes, fetchNodesFromBackend } = useNodeStore();
+  const { activeNodeId, activeView, nodes, fetchNodesFromBackend, undo, redo } = useNodeStore();
   const activeNode = nodes.find((n) => n.id === activeNodeId);
 
   useEffect(() => {
     fetchNodesFromBackend();
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Let native input undo and the block editor's own history (tiptap) handle
+      // Ctrl+Z while typing there; this shortcut is for app-level actions like
+      // deleting a node, moving a card, or removing a tag.
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        !!target && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+      if (isEditable) return;
+
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+
+      e.preventDefault();
+      if (e.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   return (
     <div className="flex h-screen w-screen bg-neutral-950 text-neutral-100 overflow-hidden font-sans">

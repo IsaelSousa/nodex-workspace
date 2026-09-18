@@ -176,13 +176,28 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
     editorProps: {
       handlePaste: (_view, event) => {
         const html = event.clipboardData?.getData('text/html');
-        if (!html || !/<img[\s>]/i.test(html)) return false;
+        if (html && /<img[\s>]/i.test(html)) {
+          event.preventDefault();
+          inlinePastedImages(html).then((transformed) => {
+            editor?.chain().focus().insertContent(transformed).run();
+          });
+          return true;
+        }
 
-        event.preventDefault();
-        inlinePastedImages(html).then((transformed) => {
-          editor?.chain().focus().insertContent(transformed).run();
-        });
-        return true;
+        // Raw image data on the clipboard (e.g. a screenshot copied from the OS,
+        // with no HTML representation). Persist it inline as base64 so it saves
+        // to the database along with the rest of the note content.
+        const files = Array.from(event.clipboardData?.files || []);
+        const imageFile = files.find((file) => file.type.startsWith('image/'));
+        if (imageFile) {
+          event.preventDefault();
+          blobToDataUrl(imageFile).then((dataUrl) => {
+            editor?.chain().focus().setImage({ src: dataUrl }).run();
+          });
+          return true;
+        }
+
+        return false;
       },
     },
   });

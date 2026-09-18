@@ -1,24 +1,30 @@
 import React from 'react';
 import { useNodeStore } from '../stores/useNodeStore';
 import { NodeIcon } from './NodeIcon';
-import { 
-  PanelLeft, 
-  Star, 
-  FileText, 
-  LayoutDashboard, 
-  Network, 
-  Search 
+import {
+  PanelLeft,
+  Star,
+  FileText,
+  LayoutDashboard,
+  Network,
+  Search,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { 
-    activeNodeId, 
-    activeView, 
-    nodes, 
-    toggleSidebar, 
-    setActiveView, 
+  const {
+    activeNodeId,
+    activeView,
+    nodes,
+    toggleSidebar,
+    setActiveView,
     toggleFavorite,
-    setCommandPaletteOpen 
+    setCommandPaletteOpen,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useNodeStore();
 
   const activeNode = nodes.find(n => n.id === activeNodeId);
@@ -52,6 +58,25 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-0.5 mr-1">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            className="p-1.5 rounded-md hover:bg-neutral-800 text-neutral-400 hover:text-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            title="Desfazer (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className="p-1.5 rounded-md hover:bg-neutral-800 text-neutral-400 hover:text-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            title="Refazer (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+
         <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs">
           <button
             onClick={() => setActiveView('doc')}
