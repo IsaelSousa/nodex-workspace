@@ -4,7 +4,7 @@
     {
       "name": "nodex-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": ["--filter", "@nodex/web", "dev"],
       "port": 5173
     }
   ]
