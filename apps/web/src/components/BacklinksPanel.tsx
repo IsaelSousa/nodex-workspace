@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNodeStore } from '../stores/useNodeStore';
 import { ArrowDownLeft, ArrowUpRight, Link2 } from 'lucide-react';
+import { NodeIcon } from './NodeIcon';
 
 interface BacklinksPanelProps {
   nodeId: string;
@@ -44,7 +45,7 @@ export const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ nodeId }) => {
                   className="w-full flex items-center justify-between p-2 rounded-lg bg-neutral-950/60 hover:bg-neutral-800/80 text-left transition-colors border border-neutral-800/40 group"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span>{src.icon || (src.type === 'board' ? '📋' : '📄')}</span>
+                    <NodeIcon value={src.icon} fallback={src.type === 'board' ? '📋' : '📄'} size={14} />
                     <span className="text-xs text-neutral-200 group-hover:text-indigo-400 font-medium truncate">
                       {src.title}
                     </span>
@@ -73,7 +74,7 @@ export const BacklinksPanel: React.FC<BacklinksPanelProps> = ({ nodeId }) => {
                   className="w-full flex items-center justify-between p-2 rounded-lg bg-neutral-950/60 hover:bg-neutral-800/80 text-left transition-colors border border-neutral-800/40 group"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span>{tgt.icon || (tgt.type === 'board' ? '📋' : '📄')}</span>
+                    <NodeIcon value={tgt.icon} fallback={tgt.type === 'board' ? '📋' : '📄'} size={14} />
                     <span className="text-xs text-neutral-200 group-hover:text-indigo-400 font-medium truncate">
                       {tgt.title}
                     </span>

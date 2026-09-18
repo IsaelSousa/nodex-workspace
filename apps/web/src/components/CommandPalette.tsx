@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNodeStore } from '../stores/useNodeStore';
 import { Search, FileText, LayoutDashboard, CornerDownLeft, X, Tag } from 'lucide-react';
 import { searchNodes } from '../lib/search';
+import { NodeIcon } from './NodeIcon';
 
 export const CommandPalette: React.FC = () => {
   const { 
@@ -79,7 +80,12 @@ export const CommandPalette: React.FC = () => {
                 className="w-full flex items-center justify-between p-2.5 rounded-lg hover:bg-neutral-800 text-left transition-colors group"
               >
                 <div className="flex items-center gap-2.5 truncate">
-                  <span className="text-base">{node.icon || (node.type === 'board' ? '📋' : node.type === 'database' ? '🗄️' : '📄')}</span>
+                  <NodeIcon
+                    value={node.icon}
+                    fallback={node.type === 'board' ? '📋' : node.type === 'database' ? '🗄️' : '📄'}
+                    size={16}
+                    className="text-base"
+                  />
                   <div className="truncate">
                     <div className="text-xs font-medium text-neutral-200 group-hover:text-white flex items-center gap-1.5">
                       {node.title}

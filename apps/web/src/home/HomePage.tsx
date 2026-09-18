@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNodeStore } from '../stores/useNodeStore';
 import { FileText, LayoutDashboard, Network, CalendarDays, Clock, Star, Plus } from 'lucide-react';
+import { NodeIcon } from '../components/NodeIcon';
 
 export const HomePage: React.FC = () => {
   const { nodes, createNode, setActiveNodeId, setActiveView } = useNodeStore();
@@ -64,7 +65,7 @@ export const HomePage: React.FC = () => {
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-left transition-colors"
                 >
-                  <span>{node.icon || (node.type === 'board' ? '📋' : '📄')}</span>
+                  <NodeIcon value={node.icon} fallback={node.type === 'board' ? '📋' : '📄'} size={14} />
                   <span className="text-xs text-neutral-300 truncate">{node.title}</span>
                 </button>
               ))}

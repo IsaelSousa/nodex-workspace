@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNodeStore } from '../stores/useNodeStore';
+import { NodeIcon } from './NodeIcon';
 import { 
   PanelLeft, 
   Star, 
@@ -35,7 +36,7 @@ export const Header: React.FC = () => {
 
         {activeNode && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-base">{activeNode.icon || (activeNode.type === 'board' ? '📋' : '📄')}</span>
+            <NodeIcon value={activeNode.icon} fallback={activeNode.type === 'board' ? '📋' : '📄'} size={16} className="text-base" />
             <span className="font-semibold text-neutral-200 truncate max-w-[200px] sm:max-w-md">
               {activeNode.title}
             </span>

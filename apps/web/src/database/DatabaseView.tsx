@@ -4,6 +4,7 @@ import { DatabaseColumnType, DatabaseColumnOption } from '@nodex/shared';
 import { Plus, Trash2, Type, Hash, CheckSquare, Calendar, ChevronDown, X } from 'lucide-react';
 import { EmojiPicker } from '../components/EmojiPicker';
 import { TagEditor } from '../components/TagEditor';
+import { NodeIcon } from '../components/NodeIcon';
 import { uuid } from '../lib/uuid';
 
 interface DatabaseViewProps {
@@ -281,7 +282,7 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ databaseId }) => {
               <tr key={row.id} className="group/row hover:bg-neutral-900/40">
                 <td className="px-3 py-1.5 border-b border-r border-neutral-800/60">
                   <div className="flex items-center gap-2">
-                    <span className="shrink-0">{row.icon || '📌'}</span>
+                    <NodeIcon value={row.icon} fallback="📌" size={14} className="shrink-0" />
                     <input
                       type="text"
                       value={row.title}

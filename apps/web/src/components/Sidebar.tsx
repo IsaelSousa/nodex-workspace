@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { NodeEntity, NodeType } from '@nodex/shared';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { NodeIcon } from './NodeIcon';
 
 interface DocTreeItemProps {
   node: NodeEntity;
@@ -60,7 +61,7 @@ const DocTreeItem: React.FC<DocTreeItemProps> = ({ node, depth, allDocs, isActiv
           ) : (
             <span className="w-4 shrink-0" />
           )}
-          <span>{node.icon || '📄'}</span>
+          <NodeIcon value={node.icon} fallback="📄" size={14} />
           <span className="truncate">{node.title}</span>
         </div>
         <button
@@ -247,7 +248,7 @@ export const Sidebar: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span>{node.icon || (node.type === 'board' ? '📋' : '📄')}</span>
+                    <NodeIcon value={node.icon} fallback={node.type === 'board' ? '📋' : '📄'} size={14} />
                     <span className="truncate">{node.title}</span>
                   </div>
                 </button>
@@ -315,7 +316,7 @@ export const Sidebar: React.FC = () => {
                 }}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <span>{node.icon || '📋'}</span>
+                  <NodeIcon value={node.icon} fallback="📋" size={14} />
                   <span className="truncate">{node.title}</span>
                 </div>
                 <button
@@ -361,7 +362,7 @@ export const Sidebar: React.FC = () => {
                 }}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <span>{node.icon || '🗄️'}</span>
+                  <NodeIcon value={node.icon} fallback="🗄️" size={14} />
                   <span className="truncate">{node.title}</span>
                 </div>
                 <button
@@ -398,7 +399,7 @@ export const Sidebar: React.FC = () => {
                   onClick={() => setActiveNodeId(node.id)}
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span>{node.icon || '📄'}</span>
+                    <NodeIcon value={node.icon} fallback="📄" size={14} />
                     <span className="truncate">{node.title}</span>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">

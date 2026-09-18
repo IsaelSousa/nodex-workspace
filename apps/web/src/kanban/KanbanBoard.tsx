@@ -21,6 +21,7 @@ import { NodeEntity, KanbanColumn } from '@nodex/shared';
 import { Plus, MoreHorizontal, CheckSquare, MessageSquare, Tag, AlertCircle, Trash2 } from 'lucide-react';
 import { EmojiPicker } from '../components/EmojiPicker';
 import { TagEditor } from '../components/TagEditor';
+import { NodeIcon } from '../components/NodeIcon';
 
 interface KanbanBoardProps {
   boardId: string;
@@ -61,7 +62,7 @@ const SortableCard: React.FC<CardItemProps> = ({ card, onClick, onDelete }) => {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span>{card.icon || '📌'}</span>
+          <NodeIcon value={card.icon} fallback="📌" size={14} />
           <h4 className="text-xs font-semibold text-neutral-100 group-hover:text-indigo-300 transition-colors line-clamp-2">
             {card.title}
           </h4>
@@ -372,7 +373,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId }) => {
           {activeCard ? (
             <div className="bg-neutral-900 p-3.5 rounded-xl border border-indigo-500/50 shadow-2xl space-y-2 opacity-90 scale-105">
               <div className="flex items-center gap-2">
-                <span>{activeCard.icon || '📌'}</span>
+                <NodeIcon value={activeCard.icon} fallback="📌" size={14} />
                 <h4 className="text-xs font-semibold text-neutral-100">{activeCard.title}</h4>
               </div>
             </div>

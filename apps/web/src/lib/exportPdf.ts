@@ -11,6 +11,17 @@ const sanitizeFileName = (name: string) =>
 const isImageAttachment = (fileName: string, fileType: string) =>
   fileType.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileName);
 
+const isImageIconValue = (value?: string | null): boolean =>
+  !!value && /^(https?:\/\/|data:image\/)/i.test(value.trim());
+
+const renderTitleIcon = (icon?: string) => {
+  if (!icon) return '';
+  if (isImageIconValue(icon)) {
+    return `<img class="nx-pdf-icon" src="${icon.trim()}" alt="" />`;
+  }
+  return `<span class="nx-pdf-icon">${icon}</span>`;
+};
+
 function renderFileAttachments(container: HTMLElement) {
   const attachmentEls = container.querySelectorAll('[data-type="file-attachment"]');
   attachmentEls.forEach((el) => {
@@ -73,6 +84,7 @@ export async function exportNodeToPdf(node: NodeEntity): Promise<void> {
     <style>
       .nx-pdf-title { font-size: 28px; font-weight: 800; margin: 0 0 4px 0; }
       .nx-pdf-icon { font-size: 32px; margin-right: 8px; }
+      img.nx-pdf-icon { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
       .nx-pdf-meta { color: #71717a; font-size: 12px; margin-bottom: 24px; border-bottom: 1px solid #e4e4e7; padding-bottom: 16px; }
       .nx-pdf-content h1, .nx-pdf-content h2, .nx-pdf-content h3 { font-weight: 700; margin: 1.4em 0 0.5em; }
       .nx-pdf-content h1 { font-size: 22px; }
@@ -93,7 +105,7 @@ export async function exportNodeToPdf(node: NodeEntity): Promise<void> {
       .nx-pdf-content img { max-width: 100%; border-radius: 6px; }
       .nx-pdf-content .wikilink { color: #4f46e5; font-weight: 600; }
     </style>
-    <div class="nx-pdf-title">${node.icon ? `<span class="nx-pdf-icon">${node.icon}</span>` : ''}${escapeHtml(title)}</div>
+    <div class="nx-pdf-title">${renderTitleIcon(node.icon)}${escapeHtml(title)}</div>
     <div class="nx-pdf-meta">Exportado de NodeX em ${new Date().toLocaleString('pt-BR')}</div>
     <div class="nx-pdf-content">${node.contentMarkdown || ''}</div>
   `;
