@@ -1,25 +1,29 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { NodeEntity, Edge, NodeType, KanbanColumn, extractWikiLinks } from '@nodex/shared';
+import { NodeEntity, Edge, NodeType, KanbanColumn, DatabaseColumn, DatabaseColumnType, extractWikiLinks } from '@nodex/shared';
 import { uuid } from '../lib/uuid';
+
+type ViewType = 'home' | 'doc' | 'board' | 'database' | 'graph' | 'split' | 'calendar' | 'timesheet' | 'tags';
 
 interface NodeStore {
   nodes: NodeEntity[];
   edges: Edge[];
   activeNodeId: string | null;
-  activeView: 'home' | 'doc' | 'board' | 'graph' | 'split' | 'calendar' | 'timesheet';
+  activeView: ViewType;
   searchQuery: string;
   isSidebarOpen: boolean;
   isCommandPaletteOpen: boolean;
   isInitialized: boolean;
+  activeTagFilter: string | null;
 
   fetchNodesFromBackend: () => Promise<void>;
   setActiveNodeId: (id: string | null) => void;
-  setActiveView: (view: 'home' | 'doc' | 'board' | 'graph' | 'split' | 'calendar' | 'timesheet') => void;
+  setActiveView: (view: ViewType) => void;
   setSearchQuery: (query: string) => void;
   toggleSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  
+  setActiveTagFilter: (tag: string | null) => void;
+
   createNode: (type: NodeType, title?: string, parentNodeId?: string | null, navigate?: boolean) => NodeEntity;
   updateNode: (id: string, updates: Partial<NodeEntity>) => void;
   deleteNode: (id: string) => void;
@@ -29,6 +33,20 @@ interface NodeStore {
   addCardToColumn: (boardId: string, columnId: string, cardTitle: string) => void;
   addColumnToBoard: (boardId: string, columnTitle: string) => void;
   deleteColumn: (boardId: string, columnId: string) => void;
+
+  addDatabaseColumn: (databaseId: string, name: string, type: DatabaseColumnType) => void;
+  updateDatabaseColumn: (databaseId: string, columnId: string, updates: Partial<DatabaseColumn>) => void;
+  deleteDatabaseColumn: (databaseId: string, columnId: string) => void;
+  addDatabaseRow: (databaseId: string, title?: string) => NodeEntity;
+  updateRowValue: (databaseId: string, rowId: string, columnId: string, value: any) => void;
+  deleteDatabaseRow: (databaseId: string, rowId: string) => void;
+
+  addTag: (nodeId: string, tag: string) => void;
+  removeTag: (nodeId: string, tag: string) => void;
+  getAllTags: () => { tag: string; count: number }[];
+
+  saveAsTemplate: (nodeId: string) => NodeEntity;
+  createFromTemplate: (templateId: string, navigate?: boolean) => NodeEntity;
 
   recalculateEdges: () => void;
   getNodeById: (id: string) => NodeEntity | undefined;
@@ -257,6 +275,7 @@ export const useNodeStore = create<NodeStore>()(
       isSidebarOpen: true,
       isCommandPaletteOpen: false,
       isInitialized: false,
+      activeTagFilter: null,
 
       fetchNodesFromBackend: async () => {
         try {
@@ -284,7 +303,7 @@ export const useNodeStore = create<NodeStore>()(
       setActiveNodeId: (id) => {
         const node = id ? get().getNodeById(id) : undefined;
         if (node) {
-          const nextView = node.type === 'board' ? 'board' : 'doc';
+          const nextView = node.type === 'board' ? 'board' : node.type === 'database' ? 'database' : 'doc';
           set({ activeNodeId: id, activeView: nextView });
         } else {
           set({ activeNodeId: id });
@@ -295,11 +314,12 @@ export const useNodeStore = create<NodeStore>()(
       setSearchQuery: (query) => set({ searchQuery: query }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
       setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+      setActiveTagFilter: (tag) => set({ activeTagFilter: tag }),
 
       createNode: (type, title, parentNodeId = null, navigate = true) => {
-        const defaultTitle = title || (type === 'board' ? 'Novo Quadro' : type === 'card' ? 'Novo Card' : 'Nova Página');
-        const defaultIcon = type === 'board' ? '📋' : type === 'card' ? '📌' : '📄';
-        
+        const defaultTitle = title || (type === 'board' ? 'Novo Quadro' : type === 'card' ? 'Novo Card' : type === 'database' ? 'Novo Banco de Dados' : 'Nova Página');
+        const defaultIcon = type === 'board' ? '📋' : type === 'card' ? '📌' : type === 'database' ? '🗄️' : '📄';
+
         const newNode: NodeEntity = {
           id: `node-${uuid()}`,
           workspaceId: 'default',
@@ -317,6 +337,15 @@ export const useNodeStore = create<NodeStore>()(
               { id: `col-${uuid()}`, title: 'Concluído', color: '#10b981', cardNodeIds: [] },
             ]
           } : undefined,
+          databaseConfig: type === 'database' ? {
+            columns: [
+              { id: `dbcol-${uuid()}`, name: 'Status', type: 'select', options: [
+                { id: `opt-${uuid()}`, label: 'A Fazer', color: '#6366f1' },
+                { id: `opt-${uuid()}`, label: 'Concluído', color: '#10b981' },
+              ] },
+            ],
+            rowNodeIds: [],
+          } : undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -326,7 +355,7 @@ export const useNodeStore = create<NodeStore>()(
           return {
             nodes: nextNodes,
             ...(navigate
-              ? { activeNodeId: newNode.id, activeView: type === 'board' ? 'board' : 'doc' as const }
+              ? { activeNodeId: newNode.id, activeView: (type === 'board' ? 'board' : type === 'database' ? 'database' : 'doc') as ViewType }
               : {}),
             edges: generateEdges(nextNodes),
           };
@@ -382,6 +411,20 @@ export const useNodeStore = create<NodeStore>()(
               const updatedBoard = { ...n, boardConfig: { ...n.boardConfig, columns } };
               syncNodeToBackend(updatedBoard, 'PUT');
               return updatedBoard;
+            }
+            if (n.type === 'database' && n.databaseConfig) {
+              const hasRemovedRow = n.databaseConfig.rowNodeIds.some((rid) => toRemove.has(rid));
+              if (!hasRemovedRow) return n;
+
+              const updatedDatabase = {
+                ...n,
+                databaseConfig: {
+                  ...n.databaseConfig,
+                  rowNodeIds: n.databaseConfig.rowNodeIds.filter((rid) => !toRemove.has(rid)),
+                },
+              };
+              syncNodeToBackend(updatedDatabase, 'PUT');
+              return updatedDatabase;
             }
             return n;
           });
@@ -531,6 +574,198 @@ export const useNodeStore = create<NodeStore>()(
             nodes: state.nodes.map((n) => (n.id === boardId ? updatedBoard : n)),
           };
         });
+      },
+
+      addDatabaseColumn: (databaseId, name, type) => {
+        set((state) => {
+          const db = state.nodes.find((n) => n.id === databaseId);
+          if (!db || !db.databaseConfig) return state;
+
+          const newColumn: DatabaseColumn = {
+            id: `dbcol-${uuid()}`,
+            name,
+            type,
+            options: type === 'select' ? [] : undefined,
+          };
+
+          const updatedDb: NodeEntity = {
+            ...db,
+            databaseConfig: { ...db.databaseConfig, columns: [...db.databaseConfig.columns, newColumn] },
+            updatedAt: new Date().toISOString(),
+          };
+
+          syncNodeToBackend(updatedDb, 'PUT');
+          return { nodes: state.nodes.map((n) => (n.id === databaseId ? updatedDb : n)) };
+        });
+      },
+
+      updateDatabaseColumn: (databaseId, columnId, updates) => {
+        set((state) => {
+          const db = state.nodes.find((n) => n.id === databaseId);
+          if (!db || !db.databaseConfig) return state;
+
+          const updatedDb: NodeEntity = {
+            ...db,
+            databaseConfig: {
+              ...db.databaseConfig,
+              columns: db.databaseConfig.columns.map((c) => (c.id === columnId ? { ...c, ...updates } : c)),
+            },
+            updatedAt: new Date().toISOString(),
+          };
+
+          syncNodeToBackend(updatedDb, 'PUT');
+          return { nodes: state.nodes.map((n) => (n.id === databaseId ? updatedDb : n)) };
+        });
+      },
+
+      deleteDatabaseColumn: (databaseId, columnId) => {
+        set((state) => {
+          const db = state.nodes.find((n) => n.id === databaseId);
+          if (!db || !db.databaseConfig) return state;
+
+          const updatedDb: NodeEntity = {
+            ...db,
+            databaseConfig: {
+              ...db.databaseConfig,
+              columns: db.databaseConfig.columns.filter((c) => c.id !== columnId),
+            },
+            updatedAt: new Date().toISOString(),
+          };
+
+          syncNodeToBackend(updatedDb, 'PUT');
+          return { nodes: state.nodes.map((n) => (n.id === databaseId ? updatedDb : n)) };
+        });
+      },
+
+      addDatabaseRow: (databaseId, title) => {
+        const row = get().createNode('card', title || 'Novo Registro', databaseId, false);
+        set((state) => {
+          const db = state.nodes.find((n) => n.id === databaseId);
+          if (!db || !db.databaseConfig) return state;
+
+          const updatedDb: NodeEntity = {
+            ...db,
+            databaseConfig: { ...db.databaseConfig, rowNodeIds: [...db.databaseConfig.rowNodeIds, row.id] },
+            updatedAt: new Date().toISOString(),
+          };
+
+          syncNodeToBackend(updatedDb, 'PUT');
+          return { nodes: state.nodes.map((n) => (n.id === databaseId ? updatedDb : n)) };
+        });
+        return row;
+      },
+
+      updateRowValue: (databaseId, rowId, columnId, value) => {
+        const row = get().nodes.find((n) => n.id === rowId);
+        if (!row) return;
+        get().updateNode(rowId, { properties: { ...row.properties, [columnId]: value } });
+      },
+
+      deleteDatabaseRow: (databaseId, rowId) => {
+        get().deleteNode(rowId);
+      },
+
+      addTag: (nodeId, tag) => {
+        const trimmed = tag.trim();
+        if (!trimmed) return;
+        const node = get().nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const existing = node.tags || [];
+        if (existing.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
+        get().updateNode(nodeId, { tags: [...existing, trimmed] });
+      },
+
+      removeTag: (nodeId, tag) => {
+        const node = get().nodes.find((n) => n.id === nodeId);
+        if (!node || !node.tags) return;
+        get().updateNode(nodeId, { tags: node.tags.filter((t) => t !== tag) });
+      },
+
+      getAllTags: () => {
+        const counts = new Map<string, number>();
+        get().nodes.forEach((n) => {
+          if (n.isArchived) return;
+          (n.tags || []).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1));
+        });
+        return Array.from(counts.entries())
+          .map(([tag, count]) => ({ tag, count }))
+          .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+      },
+
+      saveAsTemplate: (nodeId) => {
+        const source = get().nodes.find((n) => n.id === nodeId);
+        if (!source) throw new Error('Nó não encontrado');
+
+        const template: NodeEntity = {
+          id: `node-${uuid()}`,
+          workspaceId: 'default',
+          parentNodeId: null,
+          type: source.type,
+          title: `Modelo: ${source.title}`,
+          icon: source.icon,
+          isArchived: false,
+          isFavorite: false,
+          isTemplate: true,
+          contentMarkdown: source.contentMarkdown || '',
+          boardConfig: source.boardConfig ? {
+            columns: source.boardConfig.columns.map((c) => ({ ...c, cardNodeIds: [] })),
+          } : undefined,
+          databaseConfig: source.databaseConfig ? {
+            columns: source.databaseConfig.columns.map((c) => ({ ...c })),
+            rowNodeIds: [],
+          } : undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => {
+          const nextNodes = deduplicateNodes([...state.nodes, template]);
+          return { nodes: nextNodes, edges: generateEdges(nextNodes) };
+        });
+
+        syncNodeToBackend(template, 'POST');
+        return template;
+      },
+
+      createFromTemplate: (templateId, navigate = true) => {
+        const template = get().nodes.find((n) => n.id === templateId);
+        if (!template) throw new Error('Modelo não encontrado');
+
+        const newNode: NodeEntity = {
+          id: `node-${uuid()}`,
+          workspaceId: 'default',
+          parentNodeId: null,
+          type: template.type,
+          title: template.title.replace(/^Modelo:\s*/, ''),
+          icon: template.icon,
+          isArchived: false,
+          isFavorite: false,
+          isTemplate: false,
+          contentMarkdown: template.contentMarkdown || '',
+          boardConfig: template.boardConfig ? {
+            columns: template.boardConfig.columns.map((c) => ({ ...c, id: `col-${uuid()}`, cardNodeIds: [] })),
+          } : undefined,
+          databaseConfig: template.databaseConfig ? {
+            columns: template.databaseConfig.columns.map((c) => ({ ...c, id: `dbcol-${uuid()}` })),
+            rowNodeIds: [],
+          } : undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => {
+          const nextNodes = deduplicateNodes([...state.nodes, newNode]);
+          return {
+            nodes: nextNodes,
+            ...(navigate
+              ? { activeNodeId: newNode.id, activeView: (newNode.type === 'board' ? 'board' : newNode.type === 'database' ? 'database' : 'doc') as ViewType }
+              : {}),
+            edges: generateEdges(nextNodes),
+          };
+        });
+
+        syncNodeToBackend(newNode, 'POST');
+        return newNode;
       },
 
       recalculateEdges: () => {

@@ -10,6 +10,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { CalendarView } from './calendar/CalendarView';
 import { TimeTrackingView } from './timetracking/TimeTrackingView';
 import { HomePage } from './home/HomePage';
+import { DatabaseView } from './database/DatabaseView';
+import { TagsView } from './tags/TagsView';
 
 export function App() {
   const { activeNodeId, activeView, nodes, fetchNodesFromBackend } = useNodeStore();
@@ -35,11 +37,19 @@ export function App() {
             <CalendarView />
           ) : activeView === 'timesheet' ? (
             <TimeTrackingView />
+          ) : activeView === 'tags' ? (
+            <TagsView />
           ) : activeView === 'board' && activeNode ? (
             activeNode.type === 'board' ? (
               <KanbanBoard boardId={activeNode.id} />
             ) : (
               <KanbanBoard boardId={activeNode.parentNodeId || 'board-sprint'} />
+            )
+          ) : activeView === 'database' && activeNode ? (
+            activeNode.type === 'database' ? (
+              <DatabaseView databaseId={activeNode.id} />
+            ) : (
+              <DatabaseView databaseId={activeNode.parentNodeId || activeNode.id} />
             )
           ) : activeNode ? (
             <BlockEditor nodeId={activeNode.id} />

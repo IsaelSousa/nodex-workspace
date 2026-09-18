@@ -9,6 +9,7 @@ import { FileAttachmentNode } from './extensions/FileAttachmentNode';
 import { useNodeStore } from '../stores/useNodeStore';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { EmojiPicker } from '../components/EmojiPicker';
+import { TagEditor } from '../components/TagEditor';
 import { exportNodeToPdf } from '../lib/exportPdf';
 import {
   Heading1,
@@ -23,7 +24,9 @@ import {
   Image as ImageIcon,
   Upload,
   FilePlus2,
-  FileDown
+  FileDown,
+  BookmarkPlus,
+  Sparkles
 } from 'lucide-react';
 
 interface BlockEditorProps {
@@ -31,19 +34,22 @@ interface BlockEditorProps {
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
-  const { 
-    nodes, 
-    updateNode, 
-    setActiveNodeId, 
-    setActiveView, 
+  const {
+    nodes,
+    updateNode,
+    setActiveNodeId,
+    setActiveView,
     getNodeByTitle,
-    createNode 
+    createNode,
+    saveAsTemplate,
+    createFromTemplate,
   } = useNodeStore();
   const node = nodes.find((n) => n.id === nodeId);
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastLoadedNodeId = useRef<string | null>(null);
@@ -56,6 +62,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
     } finally {
       setIsExportingPdf(false);
     }
+  };
+
+  const handleSaveAsTemplate = () => {
+    if (!node) return;
+    saveAsTemplate(node.id);
+    setTemplateSaved(true);
+    setTimeout(() => setTemplateSaved(false), 2000);
+  };
+
+  const handleUseTemplate = () => {
+    if (!node) return;
+    const newNode = createFromTemplate(node.id);
+    setActiveNodeId(newNode.id);
   };
 
   const handleWikiLinkClick = (linkTitle: string) => {
@@ -218,6 +237,26 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
           <EmojiPicker value={node.icon || '📄'} onChange={(emoji) => updateNode(nodeId, { icon: emoji })} />
 
           <div className="flex items-center gap-2">
+            {node.isTemplate ? (
+              <button
+                onClick={handleUseTemplate}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium text-white transition-all shadow-sm"
+                title="Criar uma nova página a partir deste modelo"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Usar Modelo</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleSaveAsTemplate}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white disabled:opacity-50 transition-all shadow-sm"
+                title="Salvar uma cópia desta página como modelo reutilizável"
+              >
+                <BookmarkPlus className="w-3.5 h-3.5 text-amber-400" />
+                <span>{templateSaved ? 'Modelo salvo!' : 'Salvar como Modelo'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleExportPdf}
               disabled={isExportingPdf}
@@ -245,6 +284,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
           placeholder="Título da página..."
           className="w-full text-3xl md:text-4xl font-bold bg-transparent text-neutral-100 placeholder-neutral-600 focus:outline-none tracking-tight"
         />
+
+        <TagEditor nodeId={nodeId} tags={node.tags} />
 
         <div className="text-[11px] text-neutral-500 flex items-center gap-2 flex-wrap">
           <span>💡 Digite <code className="text-indigo-400 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">[[Nome da Nota]]</code> para conectar, <code className="text-indigo-400 bg-neutral-900 px-1 py-0.5 rounded border border-neutral-800">/arquivo</code> para anexar, ou arraste arquivos diretamente para cá.</span>

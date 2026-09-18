@@ -35,7 +35,10 @@ export function initDatabase() {
       is_favorite INTEGER DEFAULT 0,
       content_markdown TEXT,
       board_config TEXT,
+      database_config TEXT,
       properties TEXT,
+      tags TEXT,
+      is_template INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -104,6 +107,21 @@ export function initDatabase() {
   } catch (e) {
   }
 
+  try {
+    db.exec('ALTER TABLE nodes ADD COLUMN database_config TEXT');
+  } catch (e) {
+  }
+
+  try {
+    db.exec('ALTER TABLE nodes ADD COLUMN tags TEXT');
+  } catch (e) {
+  }
+
+  try {
+    db.exec('ALTER TABLE nodes ADD COLUMN is_template INTEGER DEFAULT 0');
+  } catch (e) {
+  }
+
   console.log(`📦 SQLite inicializado em: ${dbPath}`);
   seedInitialDataIfEmpty();
 
@@ -112,28 +130,7 @@ export function initDatabase() {
   }, 5 * 60 * 1000).unref();
 }
 
-export function getAllNodes(): NodeEntity[] {
-  const rows = db.prepare('SELECT * FROM nodes WHERE is_archived = 0 ORDER BY updated_at DESC').all() as any[];
-  return rows.map((r) => ({
-    id: r.id,
-    workspaceId: r.workspace_id,
-    parentNodeId: r.parent_node_id,
-    type: r.type,
-    title: r.title,
-    icon: r.icon,
-    isArchived: Boolean(r.is_archived),
-    isFavorite: Boolean(r.is_favorite),
-    contentMarkdown: r.content_markdown || '',
-    boardConfig: r.board_config ? JSON.parse(r.board_config) : undefined,
-    properties: r.properties ? JSON.parse(r.properties) : undefined,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  }));
-}
-
-export function getNodeById(id: string): NodeEntity | undefined {
-  const r = db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as any;
-  if (!r) return undefined;
+function mapNodeRow(r: any): NodeEntity {
   return {
     id: r.id,
     workspaceId: r.workspace_id,
@@ -145,22 +142,35 @@ export function getNodeById(id: string): NodeEntity | undefined {
     isFavorite: Boolean(r.is_favorite),
     contentMarkdown: r.content_markdown || '',
     boardConfig: r.board_config ? JSON.parse(r.board_config) : undefined,
+    databaseConfig: r.database_config ? JSON.parse(r.database_config) : undefined,
     properties: r.properties ? JSON.parse(r.properties) : undefined,
+    tags: r.tags ? JSON.parse(r.tags) : undefined,
+    isTemplate: Boolean(r.is_template),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
 }
 
+export function getAllNodes(): NodeEntity[] {
+  const rows = db.prepare('SELECT * FROM nodes WHERE is_archived = 0 ORDER BY updated_at DESC').all() as any[];
+  return rows.map(mapNodeRow);
+}
+
+export function getNodeById(id: string): NodeEntity | undefined {
+  const r = db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as any;
+  return r ? mapNodeRow(r) : undefined;
+}
+
 export function upsertNode(node: NodeEntity): void {
   const stmt = db.prepare(`
     INSERT INTO nodes (
-      id, workspace_id, parent_node_id, type, title, icon, 
-      is_archived, is_favorite, content_markdown, board_config, 
-      properties, created_at, updated_at
+      id, workspace_id, parent_node_id, type, title, icon,
+      is_archived, is_favorite, content_markdown, board_config,
+      database_config, properties, tags, is_template, created_at, updated_at
     ) VALUES (
       @id, @workspaceId, @parentNodeId, @type, @title, @icon,
       @isArchived, @isFavorite, @contentMarkdown, @boardConfig,
-      @properties, @createdAt, @updatedAt
+      @databaseConfig, @properties, @tags, @isTemplate, @createdAt, @updatedAt
     )
     ON CONFLICT(id) DO UPDATE SET
       workspace_id = excluded.workspace_id,
@@ -172,7 +182,10 @@ export function upsertNode(node: NodeEntity): void {
       is_favorite = excluded.is_favorite,
       content_markdown = excluded.content_markdown,
       board_config = excluded.board_config,
+      database_config = excluded.database_config,
       properties = excluded.properties,
+      tags = excluded.tags,
+      is_template = excluded.is_template,
       updated_at = excluded.updated_at
   `);
 
@@ -187,7 +200,10 @@ export function upsertNode(node: NodeEntity): void {
     isFavorite: node.isFavorite ? 1 : 0,
     contentMarkdown: node.contentMarkdown || '',
     boardConfig: node.boardConfig ? JSON.stringify(node.boardConfig) : null,
+    databaseConfig: node.databaseConfig ? JSON.stringify(node.databaseConfig) : null,
     properties: node.properties ? JSON.stringify(node.properties) : null,
+    tags: node.tags && node.tags.length > 0 ? JSON.stringify(node.tags) : null,
+    isTemplate: node.isTemplate ? 1 : 0,
     createdAt: node.createdAt || new Date().toISOString(),
     updatedAt: node.updatedAt || new Date().toISOString(),
   });

@@ -12,7 +12,11 @@ import {
   CalendarDays,
   Settings,
   Clock,
-  Home
+  Home,
+  Database,
+  Tag,
+  BookTemplate,
+  Sparkles
 } from 'lucide-react';
 import { NodeEntity, NodeType } from '@nodex/shared';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -90,28 +94,37 @@ const DocTreeItem: React.FC<DocTreeItemProps> = ({ node, depth, allDocs, isActiv
 };
 
 export const Sidebar: React.FC = () => {
-  const { 
-    nodes, 
-    activeNodeId, 
-    activeView, 
-    isSidebarOpen, 
-    setActiveNodeId, 
-    setActiveView, 
-    createNode, 
+  const {
+    nodes,
+    activeNodeId,
+    activeView,
+    isSidebarOpen,
+    setActiveNodeId,
+    setActiveView,
+    createNode,
     deleteNode,
-    setCommandPaletteOpen 
+    setCommandPaletteOpen,
+    setActiveTagFilter,
+    createFromTemplate,
   } = useNodeStore();
 
   const setSettingsModalOpen = useSettingsStore((s) => s.setSettingsModalOpen);
 
   if (!isSidebarOpen) return null;
 
-  const docs = nodes.filter(n => n.type === 'document' && !n.isArchived);
-  const boards = nodes.filter(n => n.type === 'board' && !n.isArchived);
+  const docs = nodes.filter(n => n.type === 'document' && !n.isArchived && !n.isTemplate);
+  const boards = nodes.filter(n => n.type === 'board' && !n.isArchived && !n.isTemplate);
+  const databases = nodes.filter(n => n.type === 'database' && !n.isArchived && !n.isTemplate);
+  const templates = nodes.filter(n => n.isTemplate && !n.isArchived);
   const favorites = nodes.filter(n => n.isFavorite && !n.isArchived);
 
   const handleCreate = (type: NodeType) => {
     const newNode = createNode(type);
+    setActiveNodeId(newNode.id);
+  };
+
+  const handleUseTemplate = (templateId: string) => {
+    const newNode = createFromTemplate(templateId);
     setActiveNodeId(newNode.id);
   };
 
@@ -194,6 +207,21 @@ export const Sidebar: React.FC = () => {
           <Clock className="w-4 h-4 text-amber-400" />
           <span>Apontamento de Horas</span>
         </button>
+
+        <button
+          onClick={() => {
+            setActiveTagFilter(null);
+            setActiveView('tags');
+          }}
+          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            activeView === 'tags'
+              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+              : 'text-neutral-300 hover:bg-neutral-800/60'
+          }`}
+        >
+          <Tag className="w-4 h-4 text-pink-400" />
+          <span>Tags</span>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-4">
@@ -210,7 +238,7 @@ export const Sidebar: React.FC = () => {
                   key={node.id}
                   onClick={() => {
                     setActiveNodeId(node.id);
-                    setActiveView(node.type === 'board' ? 'board' : 'doc');
+                    setActiveView(node.type === 'board' ? 'board' : node.type === 'database' ? 'database' : 'doc');
                   }}
                   className={`w-full group flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors text-left ${
                     activeNodeId === node.id && activeView !== 'graph'
@@ -304,6 +332,102 @@ export const Sidebar: React.FC = () => {
             ))}
           </div>
         </div>
+
+        <div>
+          <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+            <span className="flex items-center gap-1.5">
+              <Database className="w-3 h-3 text-sky-400" /> Bancos de Dados
+            </span>
+            <button
+              onClick={() => handleCreate('database')}
+              title="Criar novo banco de dados"
+              className="p-1 hover:bg-neutral-800 rounded text-neutral-400 hover:text-neutral-100 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="space-y-0.5 mt-1">
+            {databases.map((node) => (
+              <div
+                key={node.id}
+                className={`group flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                  activeNodeId === node.id && activeView === 'database'
+                    ? 'bg-neutral-800 text-neutral-100 font-medium'
+                    : 'text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200'
+                }`}
+                onClick={() => {
+                  setActiveNodeId(node.id);
+                  setActiveView('database');
+                }}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <span>{node.icon || '🗄️'}</span>
+                  <span className="truncate">{node.title}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteNode(node.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 transition-opacity"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {templates.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <BookTemplate className="w-3 h-3 text-violet-400" /> Modelos
+              </span>
+            </div>
+            <div className="space-y-0.5 mt-1">
+              {templates.map((node) => (
+                <div
+                  key={node.id}
+                  className={`group flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                    activeNodeId === node.id
+                      ? 'bg-neutral-800 text-neutral-100 font-medium'
+                      : 'text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200'
+                  }`}
+                  onClick={() => setActiveNodeId(node.id)}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span>{node.icon || '📄'}</span>
+                    <span className="truncate">{node.title}</span>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUseTemplate(node.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-400 transition-opacity"
+                      title="Usar modelo"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNode(node.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 transition-opacity"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">

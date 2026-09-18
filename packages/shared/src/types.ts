@@ -1,5 +1,25 @@
 export type NodeType = 'document' | 'board' | 'card' | 'database';
 
+export type DatabaseColumnType = 'text' | 'number' | 'select' | 'checkbox' | 'date';
+
+export interface DatabaseColumnOption {
+  id: string;
+  label: string;
+  color: string;
+}
+
+export interface DatabaseColumn {
+  id: string;
+  name: string;
+  type: DatabaseColumnType;
+  options?: DatabaseColumnOption[];
+}
+
+export interface DatabaseConfig {
+  columns: DatabaseColumn[];
+  rowNodeIds: string[];
+}
+
 export type BlockType =
   | 'paragraph'
   | 'heading_1'
@@ -94,6 +114,9 @@ export interface NodeEntity {
   blocks?: Block[];
   properties?: Record<string, any>;
   boardConfig?: BoardConfig;
+  databaseConfig?: DatabaseConfig;
+  tags?: string[];
+  isTemplate?: boolean;
   createdAt: string;
   updatedAt: string;
 }

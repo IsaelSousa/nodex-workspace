@@ -20,6 +20,7 @@ import { useNodeStore } from '../stores/useNodeStore';
 import { NodeEntity, KanbanColumn } from '@nodex/shared';
 import { Plus, MoreHorizontal, CheckSquare, MessageSquare, Tag, AlertCircle, Trash2 } from 'lucide-react';
 import { EmojiPicker } from '../components/EmojiPicker';
+import { TagEditor } from '../components/TagEditor';
 
 interface KanbanBoardProps {
   boardId: string;
@@ -213,7 +214,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId }) => {
               onChange={(e) => updateNode(boardId, { title: e.target.value })}
               className="text-2xl font-bold bg-transparent text-neutral-100 placeholder-neutral-600 focus:outline-none tracking-tight"
             />
-            <p className="text-xs text-neutral-400">Quadro Kanban interativo</p>
+            <div className="mt-1">
+              <TagEditor nodeId={boardId} tags={board.tags} />
+            </div>
           </div>
         </div>
       </div>
