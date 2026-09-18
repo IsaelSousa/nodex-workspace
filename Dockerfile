@@ -3,11 +3,14 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Enable pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Native build toolchain for better-sqlite3 (node-gyp)
+RUN apk add --no-cache python3 make g++
 
 # Copy root and package manifests
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json .npmrc ./
+
+# Enable pnpm at the version pinned in package.json's "packageManager" field
+RUN corepack enable && corepack prepare --activate
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/web/package.json ./apps/web/
 COPY apps/server/package.json ./apps/server/
@@ -32,12 +35,14 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Native build toolchain for better-sqlite3 (node-gyp)
+RUN apk add --no-cache python3 make g++
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json .npmrc ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/server/package.json ./apps/server/
 
+RUN corepack enable && corepack prepare --activate
 RUN pnpm install --prod --frozen-lockfile
 
 # Copy built artifacts

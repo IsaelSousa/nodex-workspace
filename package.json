@@ -1,7 +1,8 @@
 {
   "name": "nodex-monorepo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
+  "packageManager": "pnpm@12.4.1",
   "scripts": {
     "dev": "pnpm --filter \"@nodex/*\" --parallel dev",
     "build": "pnpm --filter \"@nodex/*\" build",

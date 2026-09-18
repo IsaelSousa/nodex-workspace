@@ -1,12 +1,10 @@
 services:
   nodex:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: pajeritmia/nodex:latest
     container_name: nodex-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3050:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000

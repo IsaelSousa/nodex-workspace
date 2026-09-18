@@ -1,7 +1,11 @@
 node_modules
+**/node_modules
 dist
+**/dist
 build
+**/build
 .turbo
+**/.turbo
 .git
 .DS_Store
 *.local
