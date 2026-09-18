@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Project, TimeEntry } from '@nodex/shared';
+import { uuid } from '../lib/uuid';
 
 interface TimeTrackingStore {
   projects: Project[];
@@ -49,7 +50,7 @@ export const useTimeTrackingStore = create<TimeTrackingStore>()((set) => ({
   createProject: async (name, color) => {
     const now = new Date().toISOString();
     const project: Project = {
-      id: `project-${crypto.randomUUID()}`,
+      id: `project-${uuid()}`,
       workspaceId: 'default',
       name,
       color,
@@ -79,7 +80,7 @@ export const useTimeTrackingStore = create<TimeTrackingStore>()((set) => ({
   createTimeEntry: async (input) => {
     const now = new Date().toISOString();
     const entry: TimeEntry = {
-      id: `entry-${crypto.randomUUID()}`,
+      id: `entry-${uuid()}`,
       workspaceId: 'default',
       createdAt: now,
       updatedAt: now,

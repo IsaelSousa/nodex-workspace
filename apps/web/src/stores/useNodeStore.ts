@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { NodeEntity, Edge, NodeType, KanbanColumn, extractWikiLinks } from '@nodex/shared';
+import { uuid } from '../lib/uuid';
 
 interface NodeStore {
   nodes: NodeEntity[];
@@ -300,7 +301,7 @@ export const useNodeStore = create<NodeStore>()(
         const defaultIcon = type === 'board' ? '📋' : type === 'card' ? '📌' : '📄';
         
         const newNode: NodeEntity = {
-          id: `node-${crypto.randomUUID()}`,
+          id: `node-${uuid()}`,
           workspaceId: 'default',
           parentNodeId,
           type,
@@ -311,9 +312,9 @@ export const useNodeStore = create<NodeStore>()(
           contentMarkdown: '',
           boardConfig: type === 'board' ? {
             columns: [
-              { id: `col-${crypto.randomUUID()}`, title: 'A Fazer', color: '#6366f1', cardNodeIds: [] },
-              { id: `col-${crypto.randomUUID()}`, title: 'Em Andamento', color: '#f59e0b', cardNodeIds: [] },
-              { id: `col-${crypto.randomUUID()}`, title: 'Concluído', color: '#10b981', cardNodeIds: [] },
+              { id: `col-${uuid()}`, title: 'A Fazer', color: '#6366f1', cardNodeIds: [] },
+              { id: `col-${uuid()}`, title: 'Em Andamento', color: '#f59e0b', cardNodeIds: [] },
+              { id: `col-${uuid()}`, title: 'Concluído', color: '#10b981', cardNodeIds: [] },
             ]
           } : undefined,
           createdAt: new Date().toISOString(),
@@ -480,7 +481,7 @@ export const useNodeStore = create<NodeStore>()(
           if (!board || !board.boardConfig) return state;
 
           const newColumn: KanbanColumn = {
-            id: `col-${crypto.randomUUID()}`,
+            id: `col-${uuid()}`,
             title: columnTitle,
             color: '#6366f1',
             cardNodeIds: [],

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { CalendarEvent } from '@nodex/shared';
+import { uuid } from '../lib/uuid';
 
 interface CalendarStore {
   events: CalendarEvent[];
@@ -43,7 +44,7 @@ export const useCalendarStore = create<CalendarStore>()((set, get) => ({
   createEvent: async (input) => {
     const now = new Date().toISOString();
     const event: CalendarEvent = {
-      id: `event-${crypto.randomUUID()}`,
+      id: `event-${uuid()}`,
       workspaceId: 'default',
       notified: false,
       createdAt: now,
