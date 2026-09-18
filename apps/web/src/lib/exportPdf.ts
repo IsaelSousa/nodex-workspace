@@ -8,6 +8,53 @@ const escapeHtml = (str: string) =>
 const sanitizeFileName = (name: string) =>
   name.trim().replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) || 'nota';
 
+const isImageAttachment = (fileName: string, fileType: string) =>
+  fileType.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(fileName);
+
+function renderFileAttachments(container: HTMLElement) {
+  const attachmentEls = container.querySelectorAll('[data-type="file-attachment"]');
+  attachmentEls.forEach((el) => {
+    const fileName = el.getAttribute('filename') || 'Arquivo anexado';
+    const fileSize = el.getAttribute('filesize') || '';
+    const fileType = el.getAttribute('filetype') || '';
+    const fileUrl = el.getAttribute('fileurl') || '';
+    const ext = fileName.split('.').pop()?.toUpperCase() || '';
+
+    const replacement = document.createElement('div');
+    if (isImageAttachment(fileName, fileType) && fileUrl) {
+      replacement.innerHTML = `
+        <div style="margin: 12px 0;">
+          <img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width:100%; max-height:420px; border-radius:8px; border:1px solid #e4e4e7; display:block;" />
+          <div style="font-size:11px; color:#71717a; margin-top:4px;">${escapeHtml(fileName)}${fileSize ? ' · ' + escapeHtml(fileSize) : ''}</div>
+        </div>`;
+    } else {
+      replacement.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px; margin:12px 0; padding:10px 14px; border:1px solid #e4e4e7; border-radius:10px; background:#f8f8f9;">
+          <div style="width:36px; height:36px; border-radius:8px; background:#eef2ff; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0;">📎</div>
+          <div>
+            <div style="font-size:12px; font-weight:600; color:#18181b;">${escapeHtml(fileName)}</div>
+            <div style="font-size:11px; color:#71717a;">${[fileSize, ext].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+          </div>
+        </div>`;
+    }
+    el.replaceWith(replacement.firstElementChild as HTMLElement);
+  });
+}
+
+async function waitForImages(container: HTMLElement) {
+  const images = Array.from(container.querySelectorAll('img'));
+  await Promise.all(
+    images.map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          })
+    )
+  );
+}
+
 export async function exportNodeToPdf(node: NodeEntity): Promise<void> {
   const title = node.title || 'Nota sem título';
 
@@ -54,6 +101,9 @@ export async function exportNodeToPdf(node: NodeEntity): Promise<void> {
   document.body.appendChild(container);
 
   try {
+    renderFileAttachments(container);
+    await waitForImages(container);
+
     const canvas = await html2canvas(container, {
       scale: 2,
       backgroundColor: '#ffffff',
