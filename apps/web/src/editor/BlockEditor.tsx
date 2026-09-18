@@ -4,6 +4,11 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { WikiLinkExtension } from './extensions/WikiLinkExtension';
 import { FileAttachmentNode } from './extensions/FileAttachmentNode';
 import { useNodeStore } from '../stores/useNodeStore';
@@ -26,11 +31,53 @@ import {
   FilePlus2,
   FileDown,
   BookmarkPlus,
-  Sparkles
+  Sparkles,
+  Table as TableIcon
 } from 'lucide-react';
 
 interface BlockEditorProps {
   nodeId: string;
+}
+
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+function stripInsignificantTableWhitespace(doc: Document) {
+  doc.querySelectorAll('table, thead, tbody, tfoot, tr').forEach((el) => {
+    Array.from(el.childNodes).forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE && !child.textContent?.trim()) {
+        el.removeChild(child);
+      }
+    });
+  });
+}
+
+async function inlinePastedImages(html: string): Promise<string> {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  stripInsignificantTableWhitespace(doc);
+  const images = Array.from(doc.querySelectorAll('img'));
+
+  await Promise.all(
+    images.map(async (img) => {
+      const src = img.getAttribute('src') || '';
+      if (!src || src.startsWith('data:')) return;
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        img.setAttribute('src', await blobToDataUrl(blob));
+      } catch {
+        // Keep the original URL if it can't be fetched (e.g. CORS-blocked or expired link).
+      }
+    })
+  );
+
+  return doc.body.innerHTML;
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
@@ -109,11 +156,34 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
         onWikiLinkClick: handleWikiLinkClick,
       }),
       FileAttachmentNode,
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: { class: 'nx-editor-image' },
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: node?.contentMarkdown || '',
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       updateNode(nodeId, { contentMarkdown: html });
+    },
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const html = event.clipboardData?.getData('text/html');
+        if (!html || !/<img[\s>]/i.test(html)) return false;
+
+        event.preventDefault();
+        inlinePastedImages(html).then((transformed) => {
+          editor?.chain().focus().insertContent(transformed).run();
+        });
+        return true;
+      },
     },
   });
 
@@ -337,6 +407,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
             <div>
               <div className="font-medium">Imagem</div>
               <div className="text-[10px] text-neutral-500">Incorporar imagem na página</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => insertCommand(() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
+            className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-neutral-800 text-xs text-neutral-200 text-left transition-colors"
+          >
+            <TableIcon className="w-4 h-4 text-sky-400" />
+            <div>
+              <div className="font-medium">Tabela</div>
+              <div className="text-[10px] text-neutral-500">Inserir uma tabela 3x3</div>
             </div>
           </button>
 

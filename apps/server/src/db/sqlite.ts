@@ -506,14 +506,21 @@ export function importAllData(data: BackupData): void {
       INSERT INTO nodes (
         id, workspace_id, parent_node_id, type, title, icon,
         is_archived, is_favorite, content_markdown, board_config,
-        properties, created_at, updated_at
+        database_config, properties, tags, is_template, created_at, updated_at
       ) VALUES (
         @id, @workspace_id, @parent_node_id, @type, @title, @icon,
         @is_archived, @is_favorite, @content_markdown, @board_config,
-        @properties, @created_at, @updated_at
+        @database_config, @properties, @tags, @is_template, @created_at, @updated_at
       )
     `);
-    for (const row of data.nodes || []) insertNode.run(row);
+    for (const row of data.nodes || []) {
+      insertNode.run({
+        database_config: null,
+        tags: null,
+        is_template: 0,
+        ...row,
+      });
+    }
 
     const insertProject = db.prepare(`
       INSERT INTO projects (id, workspace_id, name, color, is_archived, created_at, updated_at)

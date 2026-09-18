@@ -104,6 +104,9 @@ export async function exportNodeToPdf(node: NodeEntity): Promise<void> {
       .nx-pdf-content hr { border: none; border-top: 1px solid #e4e4e7; margin: 1.6em 0; }
       .nx-pdf-content img { max-width: 100%; border-radius: 6px; }
       .nx-pdf-content .wikilink { color: #4f46e5; font-weight: 600; }
+      .nx-pdf-content table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 1em 0; }
+      .nx-pdf-content table td, .nx-pdf-content table th { border: 1px solid #d4d4d8; padding: 6px 10px; vertical-align: top; font-size: 0.92em; }
+      .nx-pdf-content table th { background: #f4f4f5; font-weight: 600; text-align: left; }
     </style>
     <div class="nx-pdf-title">${renderTitleIcon(node.icon)}${escapeHtml(title)}</div>
     <div class="nx-pdf-meta">Exportado de NodeX em ${new Date().toLocaleString('pt-BR')}</div>
