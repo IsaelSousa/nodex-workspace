@@ -1,6 +1,6 @@
 {
   "name": "nodex-monorepo",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "private": true,
   "packageManager": "pnpm@12.4.1",
   "scripts": {
