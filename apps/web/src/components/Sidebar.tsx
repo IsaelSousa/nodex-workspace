@@ -29,23 +29,73 @@ interface DocTreeItemProps {
   isActive: (id: string) => boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  draggingId: string | null;
+  setDraggingId: (id: string | null) => void;
+  canDrop: (dragId: string, targetId: string) => boolean;
+  onMove: (dragId: string, newParentId: string | null) => void;
 }
 
-const DocTreeItem: React.FC<DocTreeItemProps> = ({ node, depth, allDocs, isActive, onSelect, onDelete }) => {
+const DocTreeItem: React.FC<DocTreeItemProps> = ({
+  node,
+  depth,
+  allDocs,
+  isActive,
+  onSelect,
+  onDelete,
+  draggingId,
+  setDraggingId,
+  canDrop,
+  onMove,
+}) => {
   const [expanded, setExpanded] = useState(true);
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const children = allDocs.filter((d) => d.parentNodeId === node.id);
   const hasChildren = children.length > 0;
+
+  const droppable = draggingId !== null && canDrop(draggingId, node.id);
 
   return (
     <div>
       <div
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', node.id);
+          setDraggingId(node.id);
+        }}
+        onDragEnd={() => {
+          setDraggingId(null);
+          setIsDropTarget(false);
+        }}
+        onDragOver={(e) => {
+          if (!droppable) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          if (!isDropTarget) setIsDropTarget(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDropTarget(false);
+        }}
+        onDrop={(e) => {
+          setIsDropTarget(false);
+          if (!droppable || !draggingId) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onMove(draggingId, node.id);
+          setExpanded(true);
+          setDraggingId(null);
+        }}
         onClick={() => onSelect(node.id)}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
         className={`group flex items-center justify-between pr-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer ${
-          isActive(node.id)
-            ? 'bg-neutral-800 text-neutral-100 font-medium'
-            : 'text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200'
-        }`}
+          isDropTarget
+            ? 'bg-indigo-600/25 ring-1 ring-indigo-500/60 text-neutral-100'
+            : isActive(node.id)
+              ? 'bg-neutral-800 text-neutral-100 font-medium'
+              : 'text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200'
+        } ${draggingId === node.id ? 'opacity-40' : ''}`}
       >
         <div className="flex items-center gap-1 min-w-0 flex-1">
           {hasChildren ? (
@@ -86,6 +136,10 @@ const DocTreeItem: React.FC<DocTreeItemProps> = ({ node, depth, allDocs, isActiv
               isActive={isActive}
               onSelect={onSelect}
               onDelete={onDelete}
+              draggingId={draggingId}
+              setDraggingId={setDraggingId}
+              canDrop={canDrop}
+              onMove={onMove}
             />
           ))}
         </div>
@@ -107,7 +161,11 @@ export const Sidebar: React.FC = () => {
     setCommandPaletteOpen,
     setActiveTagFilter,
     createFromTemplate,
+    updateNode,
   } = useNodeStore();
+
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isRootDropTarget, setIsRootDropTarget] = useState(false);
 
   const setSettingsModalOpen = useSettingsStore((s) => s.setSettingsModalOpen);
 
@@ -123,6 +181,28 @@ export const Sidebar: React.FC = () => {
     const newNode = createNode(type);
     setActiveNodeId(newNode.id);
   };
+
+  // A note can't be dropped on itself, on its current parent, or on one of its own descendants.
+  const canDrop = (dragId: string, targetId: string) => {
+    if (dragId === targetId) return false;
+    const drag = docs.find((d) => d.id === dragId);
+    if (!drag || drag.parentNodeId === targetId) return false;
+    let cursor = docs.find((d) => d.id === targetId);
+    const seen = new Set<string>();
+    while (cursor?.parentNodeId && !seen.has(cursor.id)) {
+      if (cursor.parentNodeId === dragId) return false;
+      seen.add(cursor.id);
+      cursor = docs.find((d) => d.id === cursor!.parentNodeId);
+    }
+    return true;
+  };
+
+  const handleMove = (dragId: string, newParentId: string | null) => {
+    updateNode(dragId, { parentNodeId: newParentId });
+  };
+
+  const draggingNode = draggingId ? docs.find((d) => d.id === draggingId) : undefined;
+  const canDropOnRoot = !!draggingNode?.parentNodeId;
 
   const handleUseTemplate = (templateId: string) => {
     const newNode = createFromTemplate(templateId);
@@ -270,7 +350,27 @@ export const Sidebar: React.FC = () => {
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="space-y-0.5 mt-1">
+          <div
+            className={`space-y-0.5 mt-1 rounded-md min-h-[24px] transition-colors ${
+              isRootDropTarget ? 'bg-indigo-600/10 ring-1 ring-indigo-500/40' : ''
+            }`}
+            onDragOver={(e) => {
+              if (!canDropOnRoot) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (!isRootDropTarget) setIsRootDropTarget(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsRootDropTarget(false);
+            }}
+            onDrop={(e) => {
+              setIsRootDropTarget(false);
+              if (!canDropOnRoot || !draggingId) return;
+              e.preventDefault();
+              handleMove(draggingId, null);
+              setDraggingId(null);
+            }}
+          >
             {docs.filter((node) => !node.parentNodeId).map((node) => (
               <DocTreeItem
                 key={node.id}
@@ -283,6 +383,10 @@ export const Sidebar: React.FC = () => {
                   setActiveView('doc');
                 }}
                 onDelete={deleteNode}
+                draggingId={draggingId}
+                setDraggingId={setDraggingId}
+                canDrop={canDrop}
+                onMove={handleMove}
               />
             ))}
           </div>
