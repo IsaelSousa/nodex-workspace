@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTrackingStore } from '../stores/useTimeTrackingStore';
 import { TimeEntry } from '@nodex/shared';
-import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, BarChart3, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, CalendarDays, BarChart3, Flag } from 'lucide-react';
 
 const PROJECT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899', '#64748b'];
 const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -21,6 +21,18 @@ function getWeekDays(anchor: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function buildMonthGrid(monthDate: Date): Date[] {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const offset = (first.getDay() + 6) % 7;
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - offset);
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
     return d;
   });
 }
@@ -87,9 +99,11 @@ export const TimeTrackingView: React.FC = () => {
     deleteTimeEntry,
   } = useTimeTrackingStore();
 
-  const [view, setView] = useState<'grid' | 'timeline'>('grid');
+  const [view, setView] = useState<'grid' | 'calendar' | 'timeline'>('grid');
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [timelineEnd, setTimelineEnd] = useState(new Date());
+  const [monthDate, setMonthDate] = useState(new Date());
+  const [pickerDate, setPickerDate] = useState<string | null>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -112,6 +126,8 @@ export const TimeTrackingView: React.FC = () => {
       return d;
     });
   }, [timelineEnd]);
+
+  const monthDays = useMemo(() => buildMonthGrid(monthDate), [monthDate]);
 
   const entriesByCell = useMemo(() => {
     const map = new Map<string, TimeEntry[]>();
@@ -137,6 +153,7 @@ export const TimeTrackingView: React.FC = () => {
   const weekLabel = `${weekDays[0].getDate()} – ${weekDays[6].getDate()} de ${weekDays[6].toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
 
   const timelineLabel = `${timelineDays[0].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${timelineDays[timelineDays.length - 1].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+  const monthLabel = monthDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   const openCell = (projectId: string, date: string) => {
     const existing = cellEntries(projectId, date);
@@ -240,6 +257,15 @@ export const TimeTrackingView: React.FC = () => {
               Grade
             </button>
             <button
+              onClick={() => setView('calendar')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                view === 'calendar' ? 'bg-indigo-600/20 text-indigo-300' : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Calendário
+            </button>
+            <button
               onClick={() => setView('timeline')}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
                 view === 'timeline' ? 'bg-indigo-600/20 text-indigo-300' : 'text-neutral-400 hover:text-neutral-200'
@@ -272,7 +298,7 @@ export const TimeTrackingView: React.FC = () => {
                 Esta semana
               </button>
             </div>
-          ) : (
+          ) : view === 'timeline' ? (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setTimelineEnd(new Date(timelineDays[0].getTime() - 24 * 60 * 60 * 1000))}
@@ -295,6 +321,28 @@ export const TimeTrackingView: React.FC = () => {
                 className="px-2 py-1 text-[11px] hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
               >
                 Período mais recente
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-neutral-300 font-medium w-40 text-center capitalize">{monthLabel}</span>
+              <button
+                onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
+                className="p-1.5 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setMonthDate(new Date())}
+                className="px-2 py-1 text-[11px] hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-100 transition-colors"
+              >
+                Este mês
               </button>
             </div>
           )}
@@ -385,6 +433,83 @@ export const TimeTrackingView: React.FC = () => {
         </div>
       ))}
 
+      {view === 'calendar' && (activeProjects.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-neutral-500 text-xs">
+          Nenhum projeto ainda.{' '}
+          <button onClick={() => setProjectsModalOpen(true)} className="text-indigo-400 hover:underline ml-1">
+            Crie um projeto
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col rounded-2xl border border-neutral-800 overflow-hidden">
+          <div className="grid grid-cols-7 bg-neutral-900 border-b border-neutral-800">
+            {WEEKDAY_LABELS.map((label) => (
+              <div key={label} className="px-2 py-2 text-center text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 grid grid-cols-7 grid-rows-6 overflow-auto">
+            {monthDays.map((d) => {
+              const dk = toDateKey(d);
+              const inMonth = d.getMonth() === monthDate.getMonth();
+              const isToday = dk === toDateKey(new Date());
+              const total = colTotal(dk);
+              const logged = activeProjects.filter((p) => cellMinutes(p.id, dk) > 0);
+              return (
+                <div
+                  key={dk}
+                  onClick={() =>
+                    activeProjects.length === 1 ? openCell(activeProjects[0].id, dk) : setPickerDate(dk)
+                  }
+                  className={`group min-h-[84px] border-b border-r border-neutral-800 p-1.5 flex flex-col gap-1 cursor-pointer hover:bg-neutral-800/40 transition-colors ${
+                    inMonth ? '' : 'bg-neutral-950/40'
+                  } ${isToday ? 'bg-indigo-600/10' : ''}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-[11px] font-medium ${
+                        isToday ? 'text-indigo-400' : inMonth ? 'text-neutral-300' : 'text-neutral-600'
+                      }`}
+                    >
+                      {d.getDate()}
+                    </span>
+                    {total > 0 ? (
+                      <span className={`text-[10px] font-semibold ${inMonth ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                        {formatDurationInput(total)}
+                      </span>
+                    ) : (
+                      <Plus className="w-3 h-3 text-neutral-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                  <div className={`flex flex-col gap-0.5 min-w-0 ${inMonth ? '' : 'opacity-50'}`}>
+                    {logged.map((p) => {
+                      const reported = isCellReported(p.id, dk);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCell(p.id, dk);
+                          }}
+                          title={`${p.name}: ${formatDurationDisplay(cellMinutes(p.id, dk))}`}
+                          className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] text-left min-w-0 hover:brightness-125 transition"
+                          style={{ backgroundColor: `${p.color}26`, color: p.color }}
+                        >
+                          {reported && <Flag className="w-2 h-2 fill-current shrink-0" />}
+                          <span className="truncate flex-1">{p.name}</span>
+                          <span className="shrink-0 font-medium">{formatDurationInput(cellMinutes(p.id, dk))}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
       {view === 'timeline' && (activeProjects.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-neutral-500 text-xs">
           Nenhum projeto ainda.{' '}
@@ -456,6 +581,42 @@ export const TimeTrackingView: React.FC = () => {
           })()}
         </div>
       ))}
+
+      {pickerDate && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPickerDate(null)}>
+          <div className="w-full max-w-xs bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 border-b border-neutral-800 flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-neutral-200 capitalize">
+                {new Date(`${pickerDate}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })}
+              </h3>
+              <button onClick={() => setPickerDate(null)} className="p-1 text-neutral-400 hover:text-neutral-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 max-h-64 overflow-y-auto">
+              {activeProjects.map((p) => {
+                const minutes = cellMinutes(p.id, pickerDate);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      openCell(p.id, pickerDate);
+                      setPickerDate(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-800/60 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="text-xs text-neutral-200 truncate">{p.name}</span>
+                    </span>
+                    <span className="text-[11px] text-neutral-500">{minutes > 0 ? formatDurationInput(minutes) : '–'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {popover && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPopover(null)}>
@@ -534,7 +695,7 @@ export const TimeTrackingView: React.FC = () => {
               <div>
                 <label className="text-[11px] text-neutral-500 mb-1 block">Repetir também em:</label>
                 <div className="flex flex-wrap gap-1">
-                  {weekDays.map((d, i) => {
+                  {getWeekDays(new Date(`${popover.date}T00:00:00`)).map((d, i) => {
                     const dk = toDateKey(d);
                     if (dk === popover.date) return null;
                     const active = popover.repeatDays.has(dk);
