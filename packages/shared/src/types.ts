@@ -160,6 +160,7 @@ export interface TimeEntry {
   durationMinutes: number;
   tags?: string[];
   description?: string;
+  reported?: boolean;
   createdAt: string;
   updatedAt: string;
 }

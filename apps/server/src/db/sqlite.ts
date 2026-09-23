@@ -85,6 +85,7 @@ export function initDatabase() {
       break_minutes INTEGER DEFAULT 0,
       duration_minutes INTEGER NOT NULL,
       description TEXT,
+      reported INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -104,6 +105,11 @@ export function initDatabase() {
 
   try {
     db.exec('ALTER TABLE time_entries ADD COLUMN tags TEXT');
+  } catch (e) {
+  }
+
+  try {
+    db.exec('ALTER TABLE time_entries ADD COLUMN reported INTEGER DEFAULT 0');
   } catch (e) {
   }
 
@@ -409,10 +415,10 @@ export function upsertTimeEntry(entry: TimeEntry): void {
   const stmt = db.prepare(`
     INSERT INTO time_entries (
       id, workspace_id, project_id, date, start_time, end_time,
-      break_minutes, duration_minutes, tags, description, created_at, updated_at
+      break_minutes, duration_minutes, tags, description, reported, created_at, updated_at
     ) VALUES (
       @id, @workspaceId, @projectId, @date, @startTime, @endTime,
-      @breakMinutes, @durationMinutes, @tags, @description, @createdAt, @updatedAt
+      @breakMinutes, @durationMinutes, @tags, @description, @reported, @createdAt, @updatedAt
     )
     ON CONFLICT(id) DO UPDATE SET
       project_id = excluded.project_id,
@@ -423,6 +429,7 @@ export function upsertTimeEntry(entry: TimeEntry): void {
       duration_minutes = excluded.duration_minutes,
       tags = excluded.tags,
       description = excluded.description,
+      reported = excluded.reported,
       updated_at = excluded.updated_at
   `);
   stmt.run({
@@ -436,6 +443,7 @@ export function upsertTimeEntry(entry: TimeEntry): void {
     durationMinutes: entry.durationMinutes,
     tags: entry.tags && entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
     description: entry.description || null,
+    reported: entry.reported ? 1 : 0,
     createdAt: entry.createdAt || new Date().toISOString(),
     updatedAt: entry.updatedAt || new Date().toISOString(),
   });
@@ -457,6 +465,7 @@ function mapTimeEntryRow(r: any): TimeEntry {
     durationMinutes: r.duration_minutes,
     tags: r.tags ? JSON.parse(r.tags) : undefined,
     description: r.description || undefined,
+    reported: !!r.reported,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -548,13 +557,13 @@ export function importAllData(data: BackupData): void {
     const insertEntry = db.prepare(`
       INSERT INTO time_entries (
         id, workspace_id, project_id, date, start_time, end_time,
-        break_minutes, duration_minutes, tags, description, created_at, updated_at
+        break_minutes, duration_minutes, tags, description, reported, created_at, updated_at
       ) VALUES (
         @id, @workspace_id, @project_id, @date, @start_time, @end_time,
-        @break_minutes, @duration_minutes, @tags, @description, @created_at, @updated_at
+        @break_minutes, @duration_minutes, @tags, @description, @reported, @created_at, @updated_at
       )
     `);
-    for (const row of data.timeEntries || []) insertEntry.run(row);
+    for (const row of data.timeEntries || []) insertEntry.run({ reported: 0, ...row });
   });
   tx();
 }

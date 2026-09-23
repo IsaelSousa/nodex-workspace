@@ -12,6 +12,7 @@ const entryBodySchema = {
     startTime: { type: 'string', minLength: 1 },
     endTime: { type: 'string', minLength: 1 },
     durationMinutes: { type: 'number' },
+    reported: { type: 'boolean' },
   },
 };
 
@@ -23,6 +24,7 @@ const entryUpdateBodySchema = {
     startTime: { type: 'string', minLength: 1 },
     endTime: { type: 'string', minLength: 1 },
     durationMinutes: { type: 'number' },
+    reported: { type: 'boolean' },
   },
 };
 

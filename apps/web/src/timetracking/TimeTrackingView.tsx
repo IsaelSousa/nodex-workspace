@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTrackingStore } from '../stores/useTimeTrackingStore';
 import { TimeEntry } from '@nodex/shared';
-import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, BarChart3, Flag } from 'lucide-react';
 
 const PROJECT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899', '#64748b'];
 const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -65,6 +65,7 @@ interface EditableRow {
   duration: string;
   description: string;
   tags: string;
+  reported: boolean;
 }
 
 interface PopoverState {
@@ -125,6 +126,10 @@ export const TimeTrackingView: React.FC = () => {
   const cellEntries = (projectId: string, dateKey: string) => entriesByCell.get(`${projectId}__${dateKey}`) || [];
   const cellMinutes = (projectId: string, dateKey: string) =>
     cellEntries(projectId, dateKey).reduce((sum, e) => sum + e.durationMinutes, 0);
+  const isCellReported = (projectId: string, dateKey: string) => {
+    const entries = cellEntries(projectId, dateKey);
+    return entries.length > 0 && entries.every((e) => e.reported);
+  };
   const rowTotal = (projectId: string) => weekDayKeys.reduce((sum, dk) => sum + cellMinutes(projectId, dk), 0);
   const colTotal = (dateKey: string) => activeProjects.reduce((sum, p) => sum + cellMinutes(p.id, dateKey), 0);
   const grandTotal = weekDayKeys.reduce((sum, dk) => sum + colTotal(dk), 0);
@@ -142,8 +147,9 @@ export const TimeTrackingView: React.FC = () => {
             duration: formatDurationInput(e.durationMinutes),
             description: e.description || '',
             tags: (e.tags || []).join(', '),
+            reported: !!e.reported,
           }))
-        : [{ duration: '', description: '', tags: '' }];
+        : [{ duration: '', description: '', tags: '', reported: false }];
     setPopover({ projectId, date, rows, repeatDays: new Set() });
   };
 
@@ -154,7 +160,7 @@ export const TimeTrackingView: React.FC = () => {
 
   const addRow = () => {
     if (!popover) return;
-    setPopover({ ...popover, rows: [...popover.rows, { duration: '', description: '', tags: '' }] });
+    setPopover({ ...popover, rows: [...popover.rows, { duration: '', description: '', tags: '', reported: false }] });
   };
 
   const removeRow = async (index: number) => {
@@ -162,7 +168,7 @@ export const TimeTrackingView: React.FC = () => {
     const row = popover.rows[index];
     if (row.id) await deleteTimeEntry(row.id);
     const rows = popover.rows.filter((_, i) => i !== index);
-    setPopover({ ...popover, rows: rows.length > 0 ? rows : [{ duration: '', description: '', tags: '' }] });
+    setPopover({ ...popover, rows: rows.length > 0 ? rows : [{ duration: '', description: '', tags: '', reported: false }] });
   };
 
   const toggleRepeatDay = (dateKey: string) => {
@@ -193,6 +199,7 @@ export const TimeTrackingView: React.FC = () => {
         durationMinutes,
         description: row.description.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
+        reported: row.reported,
       };
 
       if (row.id) {
@@ -338,15 +345,19 @@ export const TimeTrackingView: React.FC = () => {
                 {weekDayKeys.map((dk) => {
                   const minutes = cellMinutes(project.id, dk);
                   const entries = cellEntries(project.id, dk);
+                  const reported = isCellReported(project.id, dk);
                   return (
                     <button
                       key={dk}
                       onClick={() => openCell(project.id, dk)}
                       className={`border-b border-r border-neutral-800 px-2 py-2 text-center hover:bg-neutral-800/60 transition-colors ${
-                        minutes > 0 ? 'text-indigo-300 font-medium' : 'text-neutral-700'
+                        minutes > 0 ? (reported ? 'text-emerald-400 font-medium' : 'text-indigo-300 font-medium') : 'text-neutral-700'
                       }`}
                     >
-                      <span className="text-xs">{minutes > 0 ? formatDurationInput(minutes) : '–'}</span>
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        {reported && <Flag className="w-2.5 h-2.5 fill-current" />}
+                        {minutes > 0 ? formatDurationInput(minutes) : '–'}
+                      </span>
                       {entries.some((e) => e.tags && e.tags.length > 0) && (
                         <span className="block w-1 h-1 rounded-full bg-amber-400 mx-auto mt-0.5" />
                       )}
@@ -480,6 +491,17 @@ export const TimeTrackingView: React.FC = () => {
                       onChange={(e) => updateRow(index, { description: e.target.value })}
                       className="flex-1 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
                     />
+                    <button
+                      onClick={() => updateRow(index, { reported: !row.reported })}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                        row.reported
+                          ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300'
+                      }`}
+                      title={row.reported ? 'Apontado' : 'Marcar como apontado'}
+                    >
+                      <Flag className={`w-3.5 h-3.5 ${row.reported ? 'fill-current' : ''}`} />
+                    </button>
                     <button
                       onClick={() => removeRow(index)}
                       className="p-1.5 rounded-lg hover:bg-rose-500/10 text-neutral-500 hover:text-rose-400 transition-colors shrink-0"
