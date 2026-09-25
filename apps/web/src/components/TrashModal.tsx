@@ -38,7 +38,6 @@ export const TrashModal: React.FC = () => {
         className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/80">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-neutral-800 flex items-center justify-center text-rose-400">
@@ -76,7 +75,6 @@ export const TrashModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Confirmation banner */}
         {confirmEmpty && (
           <div className="p-3 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-rose-300">
@@ -100,7 +98,6 @@ export const TrashModal: React.FC = () => {
           </div>
         )}
 
-        {/* Items List */}
         <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
           {archivedNodes.length === 0 ? (
             <div className="py-14 text-center space-y-2">

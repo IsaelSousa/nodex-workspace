@@ -24,9 +24,6 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Let native input undo and the block editor's own history (tiptap) handle
-      // Ctrl+Z while typing there; this shortcut is for app-level actions like
-      // deleting a node, moving a card, or removing a tag.
       const target = e.target as HTMLElement | null;
       const isEditable =
         !!target && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');

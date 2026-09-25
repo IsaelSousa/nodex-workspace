@@ -184,7 +184,6 @@ export const Sidebar: React.FC = () => {
     setActiveNodeId(newNode.id);
   };
 
-  // A note can't be dropped on itself, on its current parent, or on one of its own descendants.
   const canDrop = (dragId: string, targetId: string) => {
     if (dragId === targetId) return false;
     const drag = docs.find((d) => d.id === dragId);

@@ -278,9 +278,6 @@ async function syncNodeToBackend(node: NodeEntity, method: 'POST' | 'PUT' | 'DEL
   }
 }
 
-// Undo/redo history. Kept outside the persisted zustand state on purpose: it only
-// makes sense for the current session, and stashing full node snapshots in
-// localStorage on every keystroke would be wasteful.
 const MAX_HISTORY = 50;
 const BATCH_WINDOW_MS = 1500;
 
@@ -292,9 +289,6 @@ let lastBatchAt = 0;
 type SetState = (partial: Partial<NodeStore>) => void;
 type GetState = () => NodeStore;
 
-// Call at the start of a mutating action, before its own `set(...)`. Passing a
-// `batchKey` coalesces rapid repeated calls (e.g. keystrokes updating the same
-// node) into a single undo step instead of one step per keystroke.
 function pushHistory(set: SetState, get: GetState, batchKey?: string) {
   const now = Date.now();
   if (batchKey && batchKey === lastBatchKey && now - lastBatchAt < BATCH_WINDOW_MS) {
@@ -314,7 +308,6 @@ function resetHistoryBatch() {
   lastBatchAt = 0;
 }
 
-// Reconciles the backend with an undo/redo jump between two node-array snapshots.
 function syncNodesDiff(from: NodeEntity[], to: NodeEntity[]) {
   const fromMap = new Map(from.map((n) => [n.id, n]));
   const toMap = new Map(to.map((n) => [n.id, n]));
@@ -982,7 +975,6 @@ export const useNodeStore = create<NodeStore>()(
           state.nodes = deduplicateNodes(state.nodes);
           state.edges = generateEdges(state.nodes);
         }
-        // The undo/redo stacks live outside persisted state and are empty on load.
         if (state) {
           state.canUndo = false;
           state.canRedo = false;

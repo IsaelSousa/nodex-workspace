@@ -72,7 +72,6 @@ async function inlinePastedImages(html: string): Promise<string> {
         const blob = await res.blob();
         img.setAttribute('src', await blobToDataUrl(blob));
       } catch {
-        // Keep the original URL if it can't be fetched (e.g. CORS-blocked or expired link).
       }
     })
   );
@@ -184,9 +183,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({ nodeId }) => {
           return true;
         }
 
-        // Raw image data on the clipboard (e.g. a screenshot copied from the OS,
-        // with no HTML representation). Persist it inline as base64 so it saves
-        // to the database along with the rest of the note content.
         const files = Array.from(event.clipboardData?.files || []);
         const imageFile = files.find((file) => file.type.startsWith('image/'));
         if (imageFile) {

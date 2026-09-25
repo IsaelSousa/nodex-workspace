@@ -96,7 +96,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
         className="w-full max-w-xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-900/80">
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
             <EmojiPicker
@@ -132,11 +131,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Metadata Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-neutral-950/60 p-3.5 rounded-xl border border-neutral-800/80">
-            {/* Prioridade */}
             <div>
               <label className="text-[11px] font-medium text-neutral-400 flex items-center gap-1.5 mb-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Prioridade
@@ -156,7 +152,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
               </div>
             </div>
 
-            {/* Prazo (Due Date) */}
             <div>
               <label className="text-[11px] font-medium text-neutral-400 flex items-center gap-1.5 mb-1.5">
                 <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Prazo (Exibido no Calendário)
@@ -170,7 +165,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
             </div>
           </div>
 
-          {/* Tags */}
           <div>
             <label className="text-[11px] font-medium text-neutral-400 block mb-1.5">
               Tags & Categorias
@@ -178,7 +172,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
             <TagEditor nodeId={cardId} tags={card.tags} />
           </div>
 
-          {/* Subtarefas / Checklists */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -261,7 +254,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ cardId, boardI
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-3.5 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between gap-3 text-xs">
           <button
             onClick={handleStartTimer}

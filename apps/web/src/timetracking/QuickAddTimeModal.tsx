@@ -99,7 +99,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Initialize or update fields when modal opens
   useEffect(() => {
     if (isOpen) {
       const selectedProj =
@@ -121,7 +120,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handlers for time calculations
   const handleStartTimeChange = (newStart: string) => {
     setStartTime(newStart);
     if (isLocked) {
@@ -170,14 +168,12 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
     const nextLocked = !isLocked;
     setIsLocked(nextLocked);
     if (nextLocked) {
-      // Re-synchronize end time based on current hours & minutes
       const totalDur = (hours || 0) * 60 + (minutes || 0);
       const startMins = timeToMinutes(startTime);
       setEndTime(minutesToTime(startMins + totalDur));
     }
   };
 
-  // Add to staged entries
   const handleAdd = () => {
     setErrorMessage(null);
     if (!projectId) {
@@ -205,10 +201,8 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
 
     setStagedEntries((prev) => [...prev, newEntry]);
 
-    // Advance for next convenient entry
     setDescription('');
     setStartTime(endTime);
-    // Keep end time = start time + same duration
     const nextEnd = minutesToTime(timeToMinutes(endTime) + durationMinutes);
     setEndTime(nextEnd);
   };
@@ -217,7 +211,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
     setStagedEntries((prev) => prev.filter((e) => e.tempId !== tempId));
   };
 
-  // Submit all entries
   const handleLogEntries = async () => {
     setErrorMessage(null);
     setIsSubmitting(true);
@@ -225,8 +218,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
     try {
       const entriesToLog = [...stagedEntries];
 
-      // If no entries are staged yet, but the user filled out the form and clicked "Registrar Apontamentos",
-      // automatically include the current valid entry!
       const currentDuration = (hours || 0) * 60 + (minutes || 0);
       if (entriesToLog.length === 0) {
         if (!projectId) {
@@ -273,7 +264,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
     }
   };
 
-  // Calculate total minutes for the staged entries
   const totalStagedMinutes = stagedEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
 
   return (
@@ -285,7 +275,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
         className="w-full max-w-4xl bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden text-neutral-100"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
         <div className="px-5 py-3.5 border-b border-neutral-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <h2 className="text-sm font-semibold text-neutral-100 tracking-tight">
@@ -305,7 +294,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body */}
         <div className="p-5 space-y-4">
           {errorMessage && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
@@ -314,9 +302,7 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
             </div>
           )}
 
-          {/* Form Row 1: Projeto, Data, Hora Inicial, Hora Final, Tempo Gasto */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-            {/* Projeto Dropdown */}
             <div className="col-span-12 md:col-span-4">
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Projeto
@@ -347,7 +333,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
               )}
             </div>
 
-            {/* Data Input */}
             <div className="col-span-6 md:col-span-2">
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Data
@@ -363,7 +348,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
               </div>
             </div>
 
-            {/* Hora Inicial */}
             <div className="col-span-6 md:col-span-2">
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Hora Inicial
@@ -379,7 +363,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
               </div>
             </div>
 
-            {/* Hora Final */}
             <div className="col-span-6 md:col-span-2">
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Hora Final
@@ -395,13 +378,11 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
               </div>
             </div>
 
-            {/* Tempo Gasto (Horas + Minutos + Trava) */}
             <div className="col-span-6 md:col-span-2">
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                 Tempo Gasto
               </label>
               <div className="flex items-center gap-1.5">
-                {/* Horas */}
                 <div className="flex-1">
                   <input
                     type="number"
@@ -415,7 +396,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
                   </span>
                 </div>
 
-                {/* Minutos */}
                 <div className="flex-1">
                   <input
                     type="number"
@@ -430,7 +410,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
                   </span>
                 </div>
 
-                {/* Botão de Trava/Cadeado */}
                 <button
                   type="button"
                   onClick={handleLockToggle}
@@ -447,7 +426,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
             </div>
           </div>
 
-          {/* Form Row 2: Descrição e Botão Adicionar */}
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 relative">
               <label className="text-xs font-medium text-neutral-300">
@@ -492,7 +470,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
             </div>
           </div>
 
-          {/* Lista de Apontamentos em Fila (Staged) */}
           {stagedEntries.length > 0 && (
             <div className="p-3 rounded-lg border border-neutral-800 bg-neutral-950/60 space-y-2">
               <div className="flex items-center justify-between">
@@ -551,7 +528,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
             </div>
           )}
 
-          {/* Apontamentos já salvos neste dia */}
           {existingEntries.length > 0 && (
             <div className="p-3 rounded-lg border border-neutral-800/80 bg-neutral-950/40 space-y-2">
               <div className="flex items-center justify-between">
@@ -602,7 +578,6 @@ export const QuickAddTimeModal: React.FC<QuickAddTimeModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer */}
         <div className="px-5 py-3.5 border-t border-neutral-800 bg-neutral-900/60 flex items-center justify-between">
           <button
             type="button"

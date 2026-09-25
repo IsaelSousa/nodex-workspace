@@ -37,14 +37,12 @@ export const LiveTimerWidget: React.FC = () => {
     }
   }, [isLoaded, fetchAll]);
 
-  // Set default selected project when projects are loaded
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
   }, [projects, selectedProjectId]);
 
-  // Timer interval
   useEffect(() => {
     if (!activeTimer || !activeTimer.isRunning) return;
     const interval = setInterval(() => {
@@ -53,7 +51,6 @@ export const LiveTimerWidget: React.FC = () => {
     return () => clearInterval(interval);
   }, [activeTimer?.isRunning, tickTimer]);
 
-  // Click outside to close popover
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
