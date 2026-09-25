@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useCalendarStore } from '../stores/useCalendarStore';
-import { CalendarEvent } from '@nodex/shared';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Bell, BellOff } from 'lucide-react';
+import { useNodeStore } from '../stores/useNodeStore';
+import { CalendarEvent, NodeEntity } from '@nodex/shared';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Bell, BellOff, CheckSquare } from 'lucide-react';
 import { openPicker } from '../lib/openPicker';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -75,6 +76,7 @@ function eventToForm(event: CalendarEvent): EventFormState {
 
 export const CalendarView: React.FC = () => {
   const { events, fetchEvents, createEvent, updateEvent, deleteEvent } = useCalendarStore();
+  const { nodes, setActiveNodeId, setActiveView } = useNodeStore();
   const [monthDate, setMonthDate] = useState(new Date());
   const [form, setForm] = useState<EventFormState | null>(null);
 
@@ -96,6 +98,18 @@ export const CalendarView: React.FC = () => {
     map.forEach((list) => list.sort((a, b) => a.startAt.localeCompare(b.startAt)));
     return map;
   }, [events]);
+
+  const cardsByDay = useMemo(() => {
+    const map = new Map<string, NodeEntity[]>();
+    nodes.forEach((n) => {
+      if (!n.isArchived && n.properties?.dueDate) {
+        const key = n.properties.dueDate;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(n);
+      }
+    });
+    return map;
+  }, [nodes]);
 
   const monthLabel = monthDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -156,6 +170,15 @@ export const CalendarView: React.FC = () => {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          <div className="hidden lg:flex items-center gap-2.5 pl-3 text-[11px] text-neutral-400 border-l border-neutral-800">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" /> Agenda
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400" /> Prazos Kanban
+            </span>
+          </div>
         </div>
         <button
           onClick={() => setForm(emptyForm(new Date()))}
@@ -180,6 +203,7 @@ export const CalendarView: React.FC = () => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth();
           const isToday = key === todayKey;
           const dayEvents = eventsByDay.get(key) || [];
+          const dayCards = cardsByDay.get(key) || [];
 
           return (
             <div
@@ -189,14 +213,51 @@ export const CalendarView: React.FC = () => {
                 isCurrentMonth ? 'bg-neutral-900/60 border-neutral-800 hover:border-neutral-700' : 'bg-neutral-950/40 border-neutral-900 hover:border-neutral-800'
               }`}
             >
-              <span
-                className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
-                  isToday ? 'bg-indigo-600 text-white' : isCurrentMonth ? 'text-neutral-300' : 'text-neutral-600'
-                }`}
-              >
-                {day.getDate()}
-              </span>
+              <div className="flex items-center justify-between">
+                <span
+                  className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
+                    isToday ? 'bg-indigo-600 text-white' : isCurrentMonth ? 'text-neutral-300' : 'text-neutral-600'
+                  }`}
+                >
+                  {day.getDate()}
+                </span>
+                {dayCards.length > 0 && (
+                  <span className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-300 rounded font-medium">
+                    {dayCards.length} {dayCards.length === 1 ? 'tarefa' : 'tarefas'}
+                  </span>
+                )}
+              </div>
               <div className="flex-1 space-y-1 overflow-y-auto">
+                {dayCards.map((card) => {
+                  const priority = card.properties?.priority;
+                  const priorityStyle =
+                    priority === 'Alta'
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
+                      : priority === 'Média'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25';
+
+                  return (
+                    <button
+                      key={card.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveNodeId(card.id);
+                        if (card.parentNodeId) {
+                          setActiveView('board');
+                        } else {
+                          setActiveView('doc');
+                        }
+                      }}
+                      className={`w-full text-left px-1.5 py-0.5 rounded-md border text-[10px] truncate flex items-center gap-1 transition-all ${priorityStyle}`}
+                      title={`Tarefa Kanban: ${card.title}`}
+                    >
+                      <span className="text-[10px] shrink-0">{card.icon || '📌'}</span>
+                      <span className="truncate font-medium">{card.title}</span>
+                    </button>
+                  );
+                })}
+
                 {dayEvents.map((event) => (
                   <button
                     key={event.id}

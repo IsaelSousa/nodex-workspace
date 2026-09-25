@@ -12,6 +12,7 @@ import { TimeTrackingView } from './timetracking/TimeTrackingView';
 import { HomePage } from './home/HomePage';
 import { DatabaseView } from './database/DatabaseView';
 import { TagsView } from './tags/TagsView';
+import { TrashModal } from './components/TrashModal';
 
 export function App() {
   const { activeNodeId, activeView, nodes, fetchNodesFromBackend, undo, redo } = useNodeStore();
@@ -85,6 +86,7 @@ export function App() {
 
       <CommandPalette />
       <SettingsModal />
+      <TrashModal />
     </div>
   );
 }

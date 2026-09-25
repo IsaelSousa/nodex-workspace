@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTrackingStore } from '../stores/useTimeTrackingStore';
 import { TimeEntry } from '@nodex/shared';
-import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, CalendarDays, BarChart3, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Trash2, Plus, Settings, LayoutGrid, CalendarDays, BarChart3, Flag, Clock } from 'lucide-react';
+import { QuickAddTimeModal } from './QuickAddTimeModal';
 
 const PROJECT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899', '#64748b'];
 const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -72,20 +73,6 @@ function formatDurationDisplay(minutes: number): string {
   return `${h}h ${m}min`;
 }
 
-interface EditableRow {
-  id?: string;
-  duration: string;
-  description: string;
-  tags: string;
-  reported: boolean;
-}
-
-interface PopoverState {
-  projectId: string;
-  date: string;
-  rows: EditableRow[];
-  repeatDays: Set<string>;
-}
 
 export const TimeTrackingView: React.FC = () => {
   const {
@@ -104,7 +91,8 @@ export const TimeTrackingView: React.FC = () => {
   const [timelineEnd, setTimelineEnd] = useState(new Date());
   const [monthDate, setMonthDate] = useState(new Date());
   const [pickerDate, setPickerDate] = useState<string | null>(null);
-  const [popover, setPopover] = useState<PopoverState | null>(null);
+  const [quickAddModalOpen, setQuickAddModalOpen] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<{ projectId?: string; date?: string } | null>(null);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
@@ -156,80 +144,34 @@ export const TimeTrackingView: React.FC = () => {
   const monthLabel = monthDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   const openCell = (projectId: string, date: string) => {
-    const existing = cellEntries(projectId, date);
-    const rows: EditableRow[] =
-      existing.length > 0
-        ? existing.map((e) => ({
-            id: e.id,
-            duration: formatDurationInput(e.durationMinutes),
-            description: e.description || '',
-            tags: (e.tags || []).join(', '),
-            reported: !!e.reported,
-          }))
-        : [{ duration: '', description: '', tags: '', reported: false }];
-    setPopover({ projectId, date, rows, repeatDays: new Set() });
+    setSelectedCell({ projectId, date });
+    setQuickAddModalOpen(true);
   };
 
-  const updateRow = (index: number, patch: Partial<EditableRow>) => {
-    if (!popover) return;
-    setPopover({ ...popover, rows: popover.rows.map((r, i) => (i === index ? { ...r, ...patch } : r)) });
+  const openQuickAdd = () => {
+    setSelectedCell({ projectId: activeProjects[0]?.id, date: toDateKey(new Date()) });
+    setQuickAddModalOpen(true);
   };
 
-  const addRow = () => {
-    if (!popover) return;
-    setPopover({ ...popover, rows: [...popover.rows, { duration: '', description: '', tags: '', reported: false }] });
-  };
-
-  const removeRow = async (index: number) => {
-    if (!popover) return;
-    const row = popover.rows[index];
-    if (row.id) await deleteTimeEntry(row.id);
-    const rows = popover.rows.filter((_, i) => i !== index);
-    setPopover({ ...popover, rows: rows.length > 0 ? rows : [{ duration: '', description: '', tags: '', reported: false }] });
-  };
-
-  const toggleRepeatDay = (dateKey: string) => {
-    if (!popover) return;
-    const next = new Set(popover.repeatDays);
-    if (next.has(dateKey)) next.delete(dateKey);
-    else next.add(dateKey);
-    setPopover({ ...popover, repeatDays: next });
-  };
-
-  const handleSavePopover = async () => {
-    if (!popover) return;
-    const { projectId, date, rows, repeatDays } = popover;
-
-    for (const row of rows) {
-      const durationMinutes = parseDurationInput(row.duration);
-      if (!durationMinutes || durationMinutes <= 0) continue;
-
-      const tags = row.tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      const basePayload = {
-        projectId,
-        startTime: '00:00',
-        endTime: formatDurationInput(durationMinutes),
-        durationMinutes,
-        description: row.description.trim() || undefined,
-        tags: tags.length > 0 ? tags : undefined,
-        reported: row.reported,
-      };
-
-      if (row.id) {
-        await updateTimeEntry(row.id, basePayload);
-      } else {
-        await createTimeEntry({ ...basePayload, date });
-        for (const repeatDate of repeatDays) {
-          await createTimeEntry({ ...basePayload, date: repeatDate });
-        }
-      }
+  const handleLogEntries = async (
+    entries: Array<{
+      projectId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      durationMinutes: number;
+      description?: string;
+      reported?: boolean;
+      tags?: string[];
+    }>
+  ) => {
+    for (const entry of entries) {
+      await createTimeEntry(entry);
     }
+  };
 
-    setPopover(null);
+  const handleDeleteExistingEntry = async (id: string) => {
+    await deleteTimeEntry(id);
   };
 
   const handleCreateProject = async () => {
@@ -237,8 +179,6 @@ export const TimeTrackingView: React.FC = () => {
     await createProject(newProjectName.trim(), newProjectColor);
     setNewProjectName('');
   };
-
-  const popoverProject = popover ? activeProjects.find((p) => p.id === popover.projectId) : null;
 
   return (
     <div className="h-full flex flex-col p-6 overflow-hidden select-none">
@@ -347,13 +287,22 @@ export const TimeTrackingView: React.FC = () => {
             </div>
           )}
         </div>
-        <button
-          onClick={() => setProjectsModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-all"
-        >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Gerenciar Projetos</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setProjectsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg text-xs font-medium text-neutral-300 hover:text-white transition-all"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Gerenciar Projetos</span>
+          </button>
+          <button
+            onClick={openQuickAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>+ Apontar Horas</span>
+          </button>
+        </div>
       </div>
 
       {view === 'grid' && (activeProjects.length === 0 ? (
@@ -459,9 +408,10 @@ export const TimeTrackingView: React.FC = () => {
               return (
                 <div
                   key={dk}
-                  onClick={() =>
-                    activeProjects.length === 1 ? openCell(activeProjects[0].id, dk) : setPickerDate(dk)
-                  }
+                  onClick={() => {
+                    setSelectedCell({ projectId: activeProjects[0]?.id, date: dk });
+                    setQuickAddModalOpen(true);
+                  }}
                   className={`group min-h-[84px] border-b border-r border-neutral-800 p-1.5 flex flex-col gap-1 cursor-pointer hover:bg-neutral-800/40 transition-colors ${
                     inMonth ? '' : 'bg-neutral-950/40'
                   } ${isToday ? 'bg-indigo-600/10' : ''}`}
@@ -618,116 +568,23 @@ export const TimeTrackingView: React.FC = () => {
         </div>
       )}
 
-      {popover && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setPopover(null)}>
-          <div className="w-full max-w-md bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="p-3 border-b border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: popoverProject?.color }} />
-                <h3 className="text-xs font-semibold text-neutral-200 truncate">
-                  {popoverProject?.name} — {new Date(`${popover.date}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })}
-                </h3>
-              </div>
-              <button onClick={() => setPopover(null)} className="p-1 text-neutral-400 hover:text-neutral-200 shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-3 space-y-3 max-h-[60vh] overflow-y-auto">
-              {popover.rows.map((row, index) => (
-                <div key={row.id || `new-${index}`} className="space-y-1.5 pb-3 border-b border-neutral-800 last:border-b-0 last:pb-0">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="ex: 2h30"
-                      value={row.duration}
-                      onChange={(e) => updateRow(index, { duration: e.target.value })}
-                      autoFocus={index === 0}
-                      className="w-24 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Descrição..."
-                      value={row.description}
-                      onChange={(e) => updateRow(index, { description: e.target.value })}
-                      className="flex-1 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
-                    />
-                    <button
-                      onClick={() => updateRow(index, { reported: !row.reported })}
-                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${
-                        row.reported
-                          ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                          : 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300'
-                      }`}
-                      title={row.reported ? 'Apontado' : 'Marcar como apontado'}
-                    >
-                      <Flag className={`w-3.5 h-3.5 ${row.reported ? 'fill-current' : ''}`} />
-                    </button>
-                    <button
-                      onClick={() => removeRow(index)}
-                      className="p-1.5 rounded-lg hover:bg-rose-500/10 text-neutral-500 hover:text-rose-400 transition-colors shrink-0"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Tags separadas por vírgula (ex: reunião, bug)"
-                    value={row.tags}
-                    onChange={(e) => updateRow(index, { tags: e.target.value })}
-                    className="w-full bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-[11px] text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
-                  />
-                  {!row.duration.trim() ? null : parseDurationInput(row.duration) === null ? (
-                    <p className="text-[10px] text-rose-400">Formato inválido — use "2h30", "2:30" ou "2.5"</p>
-                  ) : null}
-                </div>
-              ))}
-
-              <button
-                onClick={addRow}
-                className="flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar outro apontamento nesse dia
-              </button>
-
-              <div>
-                <label className="text-[11px] text-neutral-500 mb-1 block">Repetir também em:</label>
-                <div className="flex flex-wrap gap-1">
-                  {getWeekDays(new Date(`${popover.date}T00:00:00`)).map((d, i) => {
-                    const dk = toDateKey(d);
-                    if (dk === popover.date) return null;
-                    const active = popover.repeatDays.has(dk);
-                    return (
-                      <button
-                        key={dk}
-                        onClick={() => toggleRepeatDay(dk)}
-                        className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                          active
-                            ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
-                            : 'bg-neutral-950 text-neutral-400 border border-neutral-800 hover:border-neutral-700'
-                        }`}
-                      >
-                        {WEEKDAY_LABELS[i]} {d.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 border-t border-neutral-800 flex items-center justify-end">
-              <button
-                onClick={handleSavePopover}
-                className="px-3 py-1.5 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg shadow transition-colors"
-              >
-                Salvar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <QuickAddTimeModal
+        isOpen={quickAddModalOpen}
+        onClose={() => {
+          setQuickAddModalOpen(false);
+          setSelectedCell(null);
+        }}
+        projects={activeProjects}
+        initialProjectId={selectedCell?.projectId}
+        initialDate={selectedCell?.date}
+        existingEntries={
+          selectedCell?.projectId && selectedCell?.date
+            ? cellEntries(selectedCell.projectId, selectedCell.date)
+            : []
+        }
+        onLogEntries={handleLogEntries}
+        onDeleteExistingEntry={handleDeleteExistingEntry}
+      />
 
       {projectsModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setProjectsModalOpen(false)}>

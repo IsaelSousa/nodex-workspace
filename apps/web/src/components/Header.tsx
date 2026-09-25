@@ -11,6 +11,7 @@ import {
   Undo2,
   Redo2
 } from 'lucide-react';
+import { LiveTimerWidget } from './LiveTimerWidget';
 
 export const Header: React.FC = () => {
   const {
@@ -76,6 +77,8 @@ export const Header: React.FC = () => {
             <Redo2 className="w-4 h-4" />
           </button>
         </div>
+
+        <LiveTimerWidget />
 
         <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs">
           <button

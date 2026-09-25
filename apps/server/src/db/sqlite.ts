@@ -162,6 +162,11 @@ export function getAllNodes(): NodeEntity[] {
   return rows.map(mapNodeRow);
 }
 
+export function getArchivedNodes(): NodeEntity[] {
+  const rows = db.prepare('SELECT * FROM nodes WHERE is_archived = 1 ORDER BY updated_at DESC').all() as any[];
+  return rows.map(mapNodeRow);
+}
+
 export function getNodeById(id: string): NodeEntity | undefined {
   const r = db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as any;
   return r ? mapNodeRow(r) : undefined;
@@ -257,6 +262,65 @@ export function deleteNodeInDb(id: string): void {
         } catch (e) {}
       }
     }
+  });
+  tx();
+}
+
+export function archiveNodeInDb(id: string): void {
+  const tx = db.transaction(() => {
+    const descendantRows = db.prepare(`
+      WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM nodes WHERE id = ?
+        UNION ALL
+        SELECT n.id FROM nodes n JOIN descendants d ON n.parent_node_id = d.id
+      )
+      SELECT id FROM descendants
+    `).all(id) as { id: string }[];
+    const ids = descendantRows.map((r) => r.id);
+    if (ids.length === 0) return;
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`UPDATE nodes SET is_archived = 1, updated_at = ? WHERE id IN (${placeholders})`).run(
+      new Date().toISOString(),
+      ...ids
+    );
+  });
+  tx();
+}
+
+export function restoreNodeInDb(id: string): void {
+  const tx = db.transaction(() => {
+    const descendantRows = db.prepare(`
+      WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM nodes WHERE id = ?
+        UNION ALL
+        SELECT n.id FROM nodes n JOIN descendants d ON n.parent_node_id = d.id
+      )
+      SELECT id FROM descendants
+    `).all(id) as { id: string }[];
+    const ids = descendantRows.map((r) => r.id);
+    if (ids.length === 0) return;
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`UPDATE nodes SET is_archived = 0, updated_at = ? WHERE id IN (${placeholders})`).run(
+      new Date().toISOString(),
+      ...ids
+    );
+  });
+  tx();
+}
+
+export function emptyTrashInDb(): void {
+  const tx = db.transaction(() => {
+    const archivedRows = db.prepare('SELECT id FROM nodes WHERE is_archived = 1').all() as { id: string }[];
+    const ids = archivedRows.map((r) => r.id);
+    if (ids.length === 0) return;
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM nodes WHERE id IN (${placeholders})`).run(...ids);
+    db.prepare(
+      `DELETE FROM edges WHERE source_node_id IN (${placeholders}) OR target_node_id IN (${placeholders})`
+    ).run(...ids, ...ids);
   });
   tx();
 }

@@ -18,10 +18,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useNodeStore } from '../stores/useNodeStore';
 import { NodeEntity, KanbanColumn } from '@nodex/shared';
-import { Plus, MoreHorizontal, CheckSquare, MessageSquare, Tag, AlertCircle, Trash2 } from 'lucide-react';
+import { Plus, MoreHorizontal, CheckSquare, MessageSquare, Tag, AlertCircle, Trash2, Calendar } from 'lucide-react';
 import { EmojiPicker } from '../components/EmojiPicker';
 import { TagEditor } from '../components/TagEditor';
 import { NodeIcon } from '../components/NodeIcon';
+import { CardDetailModal } from './CardDetailModal';
 
 interface KanbanBoardProps {
   boardId: string;
@@ -50,6 +51,14 @@ const SortableCard: React.FC<CardItemProps> = ({ card, onClick, onDelete }) => {
       : card.properties?.priority === 'Média'
       ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dueDate = card.properties?.dueDate;
+  const isOverdue = dueDate && dueDate < todayStr;
+  const isDueToday = dueDate && dueDate === todayStr;
+
+  const subtasks: any[] = card.properties?.subtasks || [];
+  const completedSubtasks = subtasks.filter((s) => s.completed).length;
 
   return (
     <div
@@ -86,11 +95,49 @@ const SortableCard: React.FC<CardItemProps> = ({ card, onClick, onDelete }) => {
         </p>
       )}
 
-      <div className="flex items-center justify-between pt-1 text-[10px]">
+      {subtasks.length > 0 && (
+        <div className="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 ${
+              completedSubtasks === subtasks.length ? 'bg-emerald-500' : 'bg-indigo-500'
+            }`}
+            style={{ width: `${Math.round((completedSubtasks / subtasks.length) * 100)}%` }}
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-0.5 text-[10px] flex-wrap gap-1.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           {card.properties?.priority && (
             <span className={`px-2 py-0.5 rounded-md border font-medium ${priorityColor}`}>
               {card.properties.priority}
+            </span>
+          )}
+          {dueDate && (
+            <span
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border font-medium ${
+                isOverdue
+                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  : isDueToday
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : 'bg-neutral-800 text-neutral-400 border-neutral-700/50'
+              }`}
+              title={`Prazo: ${dueDate}`}
+            >
+              <Calendar className="w-2.5 h-2.5" />
+              <span>{dueDate.slice(5).replace('-', '/')}</span>
+            </span>
+          )}
+          {subtasks.length > 0 && (
+            <span
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border font-medium ${
+                completedSubtasks === subtasks.length
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-neutral-800 text-neutral-400 border-neutral-700/50'
+              }`}
+            >
+              <CheckSquare className="w-2.5 h-2.5" />
+              <span>{completedSubtasks}/{subtasks.length}</span>
             </span>
           )}
           {card.properties?.tag && (
@@ -134,6 +181,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId }) => {
 
   const board = nodes.find((n) => n.id === boardId);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [newCardTitles, setNewCardTitles] = useState<Record<string, string>>({});
   const [addingCardColId, setAddingCardColId] = useState<string | null>(null);
   const [newColTitle, setNewColTitle] = useState('');
@@ -279,10 +327,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId }) => {
                       <SortableCard
                         key={card.id}
                         card={card}
-                        onClick={() => {
-                          setActiveNodeId(card.id);
-                          setActiveView('doc');
-                        }}
+                        onClick={() => setEditingCardId(card.id)}
                         onDelete={() => deleteNode(card.id)}
                       />
                     ))}
@@ -380,6 +425,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ boardId }) => {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {editingCardId && (
+        <CardDetailModal
+          cardId={editingCardId}
+          boardId={boardId}
+          onClose={() => setEditingCardId(null)}
+        />
+      )}
     </div>
   );
 };

@@ -162,6 +162,8 @@ export const Sidebar: React.FC = () => {
     setActiveTagFilter,
     createFromTemplate,
     updateNode,
+    archivedNodes,
+    setTrashOpen,
   } = useNodeStore();
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -540,7 +542,19 @@ export const Sidebar: React.FC = () => {
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="truncate">Online</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setTrashOpen(true)}
+            title="Lixeira"
+            className="p-1 hover:bg-neutral-800 rounded text-neutral-400 hover:text-rose-400 transition-colors relative"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {archivedNodes.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
+                {archivedNodes.length > 9 ? '9+' : archivedNodes.length}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setSettingsModalOpen(true)}
             title="Configurações"

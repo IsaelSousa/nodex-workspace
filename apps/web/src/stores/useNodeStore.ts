@@ -29,6 +29,15 @@ interface NodeStore {
   setCommandPaletteOpen: (open: boolean) => void;
   setActiveTagFilter: (tag: string | null) => void;
 
+  archivedNodes: NodeEntity[];
+  isTrashOpen: boolean;
+  setTrashOpen: (open: boolean) => void;
+  fetchArchivedNodes: () => Promise<void>;
+  archiveNode: (id: string) => Promise<void>;
+  restoreNode: (id: string) => Promise<void>;
+  permanentlyDeleteNode: (id: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+
   createNode: (type: NodeType, title?: string, parentNodeId?: string | null, navigate?: boolean) => NodeEntity;
   updateNode: (id: string, updates: Partial<NodeEntity>) => void;
   deleteNode: (id: string) => void;
@@ -335,6 +344,9 @@ export const useNodeStore = create<NodeStore>()(
       isCommandPaletteOpen: false,
       isInitialized: false,
       activeTagFilter: null,
+      archivedNodes: [],
+      isTrashOpen: false,
+      setTrashOpen: (open) => set({ isTrashOpen: open }),
       canUndo: false,
       canRedo: false,
 
@@ -370,7 +382,20 @@ export const useNodeStore = create<NodeStore>()(
         });
       },
 
+      fetchArchivedNodes: async () => {
+        try {
+          const res = await fetch('/api/nodes/archived');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.nodes && Array.isArray(data.nodes)) {
+              set({ archivedNodes: deduplicateNodes(data.nodes) });
+            }
+          }
+        } catch (e) {}
+      },
+
       fetchNodesFromBackend: async () => {
+        get().fetchArchivedNodes();
         try {
           const res = await fetch('/api/nodes');
           if (res.ok) {
@@ -482,16 +507,19 @@ export const useNodeStore = create<NodeStore>()(
         });
       },
 
-      deleteNode: (id) => {
-        const nodeToDelete = get().nodes.find((n) => n.id === id);
-        if (nodeToDelete) {
-          syncNodeToBackend(nodeToDelete, 'DELETE');
-        }
+      archiveNode: async (id: string) => {
+        try {
+          await fetch(`/api/nodes/${id}/archive`, { method: 'POST' });
+        } catch (e) {}
 
         pushHistory(set, get);
         set((state) => {
           const toRemove = collectDescendantIds(state.nodes, id);
+          const nodesToArchive = state.nodes
+            .filter((n) => toRemove.has(n.id))
+            .map((n) => ({ ...n, isArchived: true }));
           const nextNodes = state.nodes.filter((n) => !toRemove.has(n.id));
+          const nextArchived = deduplicateNodes([...state.archivedNodes, ...nodesToArchive]);
 
           const cleanedNodes = nextNodes.map((n) => {
             if (n.type === 'board' && n.boardConfig) {
@@ -530,11 +558,60 @@ export const useNodeStore = create<NodeStore>()(
 
           return {
             nodes: unique,
+            archivedNodes: nextArchived,
             activeNodeId: wasActiveDeleted ? null : state.activeNodeId,
             activeView: wasActiveDeleted ? 'home' : state.activeView,
             edges: generateEdges(unique),
           };
         });
+      },
+
+      deleteNode: (id) => {
+        get().archiveNode(id);
+      },
+
+      restoreNode: async (id: string) => {
+        try {
+          await fetch(`/api/nodes/${id}/restore`, { method: 'POST' });
+        } catch (e) {}
+
+        const toRestore = collectDescendantIds(get().archivedNodes, id);
+        const restoredNodes = get().archivedNodes
+          .filter((n) => toRestore.has(n.id))
+          .map((n) => ({ ...n, isArchived: false }));
+
+        pushHistory(set, get);
+        set((state) => {
+          const nextArchived = state.archivedNodes.filter((n) => !toRestore.has(n.id));
+          const nextNodes = deduplicateNodes([...state.nodes, ...restoredNodes]);
+
+          return {
+            nodes: nextNodes,
+            archivedNodes: nextArchived,
+            edges: generateEdges(nextNodes),
+          };
+        });
+      },
+
+      permanentlyDeleteNode: async (id: string) => {
+        try {
+          await fetch(`/api/nodes/${id}`, { method: 'DELETE' });
+        } catch (e) {}
+
+        set((state) => {
+          const toRemove = collectDescendantIds(state.archivedNodes, id);
+          return {
+            archivedNodes: state.archivedNodes.filter((n) => !toRemove.has(n.id)),
+          };
+        });
+      },
+
+      emptyTrash: async () => {
+        try {
+          await fetch('/api/nodes/empty-trash', { method: 'POST' });
+        } catch (e) {}
+
+        set({ archivedNodes: [] });
       },
 
       toggleFavorite: (id) => {

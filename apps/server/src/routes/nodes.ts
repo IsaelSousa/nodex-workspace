@@ -1,6 +1,16 @@
 import { FastifyInstance } from 'fastify';
 import { NodeEntity } from '@nodex/shared';
-import { getAllNodes, getNodeById, upsertNode, deleteNodeInDb, getAllEdges } from '../db/sqlite.js';
+import {
+  getAllNodes,
+  getArchivedNodes,
+  getNodeById,
+  upsertNode,
+  deleteNodeInDb,
+  archiveNodeInDb,
+  restoreNodeInDb,
+  emptyTrashInDb,
+  getAllEdges,
+} from '../db/sqlite.js';
 
 const nodeBodySchema = {
   type: 'object',
@@ -29,6 +39,48 @@ export async function nodeRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Erro ao consultar SQLite', details: err.message });
+    }
+  });
+
+  fastify.get('/api/nodes/archived', async (request, reply) => {
+    try {
+      const nodes = getArchivedNodes();
+      return { nodes };
+    } catch (err: any) {
+      fastify.log.error(err);
+      return reply.status(500).send({ error: 'Erro ao consultar nós arquivados', details: err.message });
+    }
+  });
+
+  fastify.post('/api/nodes/empty-trash', async (request, reply) => {
+    try {
+      emptyTrashInDb();
+      return { success: true };
+    } catch (err: any) {
+      fastify.log.error(err);
+      return reply.status(500).send({ error: 'Erro ao esvaziar lixeira', details: err.message });
+    }
+  });
+
+  fastify.post<{ Params: { id: string } }>('/api/nodes/:id/archive', async (request, reply) => {
+    const { id } = request.params;
+    try {
+      archiveNodeInDb(id);
+      return { success: true };
+    } catch (err: any) {
+      fastify.log.error(err);
+      return reply.status(500).send({ error: 'Erro ao arquivar nó no SQLite', details: err.message });
+    }
+  });
+
+  fastify.post<{ Params: { id: string } }>('/api/nodes/:id/restore', async (request, reply) => {
+    const { id } = request.params;
+    try {
+      restoreNodeInDb(id);
+      return { success: true };
+    } catch (err: any) {
+      fastify.log.error(err);
+      return reply.status(500).send({ error: 'Erro ao restaurar nó no SQLite', details: err.message });
     }
   });
 

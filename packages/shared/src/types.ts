@@ -100,6 +100,20 @@ export interface BoardConfig {
   groupByPropertyId?: string;
 }
 
+export interface CardSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export interface CardProperties {
+  priority?: 'Alta' | 'Média' | 'Baixa';
+  tag?: string;
+  dueDate?: string;
+  subtasks?: CardSubtask[];
+  [key: string]: any;
+}
+
 export interface NodeEntity {
   id: string;
   workspaceId: string;
